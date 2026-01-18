@@ -1,14 +1,14 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, Link, FileSpreadsheet, CheckCircle, AlertCircle, Loader2, Table } from 'lucide-react';
+import { Upload, Link, FileSpreadsheet, CheckCircle, AlertCircle, Loader2, Server, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useMLStore, ColumnInfo } from '@/hooks/useMLStore';
 import { t } from '@/lib/translations';
-import Papa from 'papaparse';
+import { uploadFile, uploadFromURL, getColumns, healthCheck, ColumnInfoAPI } from '@/lib/api';
 
-// Sample datasets
+// Sample datasets - will be loaded from URL via backend
 const sampleDatasets = [
   { name: 'Titanic (Classification)', url: 'https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv', icon: '🚢' },
   { name: 'Iris (Classification)', url: 'https://raw.githubusercontent.com/mwaskom/seaborn-data/master/iris.csv', icon: '🌸' },
@@ -16,61 +16,17 @@ const sampleDatasets = [
   { name: 'Penguins (Classification)', url: 'https://raw.githubusercontent.com/mwaskom/seaborn-data/master/penguins.csv', icon: '🐧' },
 ];
 
-function analyzeColumns(data: Record<string, any>[]): ColumnInfo[] {
-  if (!data.length) return [];
-  
-  const columns: ColumnInfo[] = [];
-  const firstRow = data[0];
-  
-  for (const key of Object.keys(firstRow)) {
-    const values = data.map(row => row[key]);
-    const nonNullValues = values.filter(v => v !== null && v !== undefined && v !== '');
-    const missing = values.length - nonNullValues.length;
-    const uniqueValues = new Set(nonNullValues);
-    
-    let type: ColumnInfo['type'] = 'categorical';
-    const numericValues = nonNullValues.filter(v => !isNaN(Number(v)));
-    
-    if (numericValues.length > nonNullValues.length * 0.8) {
-      type = 'numeric';
-      const nums = numericValues.map(Number);
-      const mean = nums.reduce((a, b) => a + b, 0) / nums.length;
-      const sorted = [...nums].sort((a, b) => a - b);
-      const median = sorted[Math.floor(sorted.length / 2)];
-      const std = Math.sqrt(nums.reduce((sum, n) => sum + Math.pow(n - mean, 2), 0) / nums.length);
-      
-      columns.push({
-        name: key,
-        type,
-        missing,
-        unique: uniqueValues.size,
-        stats: {
-          mean: Number(mean.toFixed(2)),
-          median: Number(median.toFixed(2)),
-          std: Number(std.toFixed(2)),
-          min: Math.min(...nums),
-          max: Math.max(...nums),
-        }
-      });
-    } else if (uniqueValues.size === 2 && (uniqueValues.has(true) || uniqueValues.has('true') || uniqueValues.has(1))) {
-      type = 'boolean';
-      columns.push({ name: key, type, missing, unique: uniqueValues.size });
-    } else {
-      const freq: Record<string, number> = {};
-      nonNullValues.forEach(v => { freq[String(v)] = (freq[String(v)] || 0) + 1; });
-      const mode = Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0];
-      
-      columns.push({
-        name: key,
-        type,
-        missing,
-        unique: uniqueValues.size,
-        stats: { mode }
-      });
-    }
-  }
-  
-  return columns;
+// Convert API column format to store format
+function convertColumns(apiColumns: ColumnInfoAPI[]): ColumnInfo[] {
+  return apiColumns.map(col => ({
+    name: col.name,
+    type: col.dtype === 'float64' || col.dtype === 'int64' ? 'numeric' 
+        : col.dtype === 'bool' ? 'boolean'
+        : 'categorical',
+    missing: col.missing,
+    unique: col.unique,
+    stats: col.stats,
+  }));
 }
 
 export function DataSourceScreen() {
@@ -79,44 +35,52 @@ export function DataSourceScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dataName, setDataName] = useState<string>('');
+  const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const isRTL = lang === 'he';
 
-  const processData = useCallback((results: Papa.ParseResult<Record<string, any>>, name: string) => {
-    if (results.errors.length) {
-      setError(results.errors[0].message);
-      return;
+  // Check backend status on mount
+  useEffect(() => {
+    async function checkBackend() {
+      const health = await healthCheck();
+      setBackendStatus(health.status === 'offline' ? 'offline' : 'online');
     }
-    
-    const parsedData = results.data.filter(row => Object.values(row).some(v => v !== null && v !== ''));
-    setData(parsedData);
-    setOriginalData([...parsedData]);
-    setColumns(analyzeColumns(parsedData));
-    setDataHistory([]);
-    setDataName(name);
-    setError(null);
+    checkBackend();
+  }, []);
+
+  const fetchColumnsAfterUpload = useCallback(async (name: string) => {
+    try {
+      const columnsData = await getColumns();
+      setData(columnsData.data_preview);
+      setOriginalData([...columnsData.data_preview]);
+      setColumns(convertColumns(columnsData.columns));
+      setDataHistory([]);
+      setDataName(name);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch columns');
+    }
   }, [setData, setOriginalData, setColumns, setDataHistory]);
 
-  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     
     setLoading(true);
     setError(null);
     
-    Papa.parse(file, {
-      header: true,
-      dynamicTyping: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        processData(results, file.name);
-        setLoading(false);
-      },
-      error: (err) => {
-        setError(err.message);
-        setLoading(false);
+    try {
+      const response = await uploadFile(file);
+      if (response.success) {
+        await fetchColumnsAfterUpload(file.name);
+      } else {
+        setError(response.message);
       }
-    });
-  }, [processData]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchColumnsAfterUpload]);
 
   const handleUrlLoad = useCallback(async () => {
     if (!url.trim()) return;
@@ -124,42 +88,38 @@ export function DataSourceScreen() {
     setLoading(true);
     setError(null);
     
-    Papa.parse(url, {
-      download: true,
-      header: true,
-      dynamicTyping: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        processData(results, 'URL Data');
-        setLoading(false);
-      },
-      error: (err) => {
-        setError(err.message);
-        setLoading(false);
+    try {
+      const response = await uploadFromURL(url);
+      if (response.success) {
+        await fetchColumnsAfterUpload('URL Data');
+      } else {
+        setError(response.message);
       }
-    });
-  }, [url, processData]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load URL');
+    } finally {
+      setLoading(false);
+    }
+  }, [url, fetchColumnsAfterUpload]);
 
-  const handleSampleLoad = useCallback((sampleUrl: string, name: string) => {
+  const handleSampleLoad = useCallback(async (sampleUrl: string, name: string) => {
     setUrl(sampleUrl);
     setLoading(true);
     setError(null);
     
-    Papa.parse(sampleUrl, {
-      download: true,
-      header: true,
-      dynamicTyping: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        processData(results, name);
-        setLoading(false);
-      },
-      error: (err) => {
-        setError(err.message);
-        setLoading(false);
+    try {
+      const response = await uploadFromURL(sampleUrl);
+      if (response.success) {
+        await fetchColumnsAfterUpload(name);
+      } else {
+        setError(response.message);
       }
-    });
-  }, [processData]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load sample');
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchColumnsAfterUpload]);
 
   const handleChangeData = () => {
     setData(null);
@@ -168,6 +128,38 @@ export function DataSourceScreen() {
     setDataHistory([]);
     setDataName('');
   };
+
+  // Backend offline warning
+  if (backendStatus === 'offline') {
+    return (
+      <div className="p-8 max-w-4xl mx-auto">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="glass-card rounded-xl p-8 border-destructive/30 bg-destructive/5 text-center">
+            <WifiOff className="w-16 h-16 text-destructive mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-destructive mb-2">
+              {lang === 'he' ? 'השרת לא זמין' : 'Backend Offline'}
+            </h2>
+            <p className="text-muted-foreground mb-4">
+              {lang === 'he' 
+                ? 'אנא הפעל את שרת ה-Python ב-localhost:8000' 
+                : 'Please start the Python server at localhost:8000'}
+            </p>
+            <div className="bg-card rounded-lg p-4 text-left font-mono text-sm">
+              <p className="text-muted-foreground mb-2"># Run in terminal:</p>
+              <p className="text-primary">uvicorn main:app --reload --port 8000</p>
+            </div>
+            <Button 
+              variant="outline" 
+              className="mt-6"
+              onClick={() => window.location.reload()}
+            >
+              🔄 {lang === 'he' ? 'נסה שוב' : 'Retry'}
+            </Button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   // Compact view when data is loaded
   if (data) {
@@ -191,6 +183,12 @@ export function DataSourceScreen() {
                 <div className="text-center">
                   <p className="text-2xl font-bold text-primary">{Object.keys(data[0] || {}).length}</p>
                   <p className="text-xs text-muted-foreground">{t('data.columns', lang)}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 text-success text-sm">
+                    <Server className="w-4 h-4" />
+                    <span>Backend</span>
+                  </div>
                 </div>
                 <Button variant="outline" size="sm" onClick={handleChangeData}>
                   🔄 {lang === 'he' ? 'החלף נתונים' : 'Change Data'}
@@ -238,10 +236,18 @@ export function DataSourceScreen() {
   return (
     <div className="p-8 max-w-4xl mx-auto">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-3xl font-bold mb-2">{t('data.title', lang)}</h1>
-        <p className="text-muted-foreground mb-8">
-          {lang === 'he' ? 'בחר מקור נתונים להתחלת הפרויקט' : 'Choose a data source to start your project'}
-        </p>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">{t('data.title', lang)}</h1>
+            <p className="text-muted-foreground">
+              {lang === 'he' ? 'בחר מקור נתונים להתחלת הפרויקט' : 'Choose a data source to start your project'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-success text-sm bg-success/10 px-3 py-1.5 rounded-full">
+            <Server className="w-4 h-4" />
+            <span>{lang === 'he' ? 'מחובר לשרת' : 'Backend Connected'}</span>
+          </div>
+        </div>
 
         <Tabs defaultValue="sample" className="w-full">
           <TabsList className="grid w-full grid-cols-3 mb-8">
@@ -328,7 +334,12 @@ export function DataSourceScreen() {
             className="mt-8 glass-card rounded-xl p-6 flex items-center gap-4"
           >
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
-            <span>{t('general.loading', lang)}</span>
+            <div>
+              <p className="font-medium">{t('general.loading', lang)}</p>
+              <p className="text-sm text-muted-foreground">
+                {lang === 'he' ? 'שולח נתונים לשרת...' : 'Sending data to backend...'}
+              </p>
+            </div>
           </motion.div>
         )}
 
