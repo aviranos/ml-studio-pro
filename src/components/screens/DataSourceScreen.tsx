@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, Link, FileSpreadsheet, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, Link, FileSpreadsheet, CheckCircle, AlertCircle, Loader2, Table } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -10,9 +10,10 @@ import Papa from 'papaparse';
 
 // Sample datasets
 const sampleDatasets = [
-  { name: 'Iris (Classification)', url: 'https://raw.githubusercontent.com/mwaskom/seaborn-data/master/iris.csv' },
-  { name: 'Tips (Regression)', url: 'https://raw.githubusercontent.com/mwaskom/seaborn-data/master/tips.csv' },
-  { name: 'Titanic (Classification)', url: 'https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv' },
+  { name: 'Titanic (Classification)', url: 'https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv', icon: '🚢' },
+  { name: 'Iris (Classification)', url: 'https://raw.githubusercontent.com/mwaskom/seaborn-data/master/iris.csv', icon: '🌸' },
+  { name: 'Tips (Regression)', url: 'https://raw.githubusercontent.com/mwaskom/seaborn-data/master/tips.csv', icon: '💵' },
+  { name: 'Penguins (Classification)', url: 'https://raw.githubusercontent.com/mwaskom/seaborn-data/master/penguins.csv', icon: '🐧' },
 ];
 
 function analyzeColumns(data: Record<string, any>[]): ColumnInfo[] {
@@ -27,7 +28,6 @@ function analyzeColumns(data: Record<string, any>[]): ColumnInfo[] {
     const missing = values.length - nonNullValues.length;
     const uniqueValues = new Set(nonNullValues);
     
-    // Detect type
     let type: ColumnInfo['type'] = 'categorical';
     const numericValues = nonNullValues.filter(v => !isNaN(Number(v)));
     
@@ -56,7 +56,6 @@ function analyzeColumns(data: Record<string, any>[]): ColumnInfo[] {
       type = 'boolean';
       columns.push({ name: key, type, missing, unique: uniqueValues.size });
     } else {
-      // Find mode for categorical
       const freq: Record<string, number> = {};
       nonNullValues.forEach(v => { freq[String(v)] = (freq[String(v)] || 0) + 1; });
       const mode = Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0];
@@ -75,13 +74,14 @@ function analyzeColumns(data: Record<string, any>[]): ColumnInfo[] {
 }
 
 export function DataSourceScreen() {
-  const { lang, data, setData, setColumns, setCurrentScreen } = useMLStore();
+  const { lang, data, setData, setOriginalData, setColumns, setCurrentScreen, setDataHistory } = useMLStore();
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dataName, setDataName] = useState<string>('');
   const isRTL = lang === 'he';
 
-  const processData = useCallback((results: Papa.ParseResult<Record<string, any>>) => {
+  const processData = useCallback((results: Papa.ParseResult<Record<string, any>>, name: string) => {
     if (results.errors.length) {
       setError(results.errors[0].message);
       return;
@@ -89,9 +89,12 @@ export function DataSourceScreen() {
     
     const parsedData = results.data.filter(row => Object.values(row).some(v => v !== null && v !== ''));
     setData(parsedData);
+    setOriginalData([...parsedData]);
     setColumns(analyzeColumns(parsedData));
+    setDataHistory([]);
+    setDataName(name);
     setError(null);
-  }, [setData, setColumns]);
+  }, [setData, setOriginalData, setColumns, setDataHistory]);
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -105,7 +108,7 @@ export function DataSourceScreen() {
       dynamicTyping: true,
       skipEmptyLines: true,
       complete: (results) => {
-        processData(results);
+        processData(results, file.name);
         setLoading(false);
       },
       error: (err) => {
@@ -127,7 +130,7 @@ export function DataSourceScreen() {
       dynamicTyping: true,
       skipEmptyLines: true,
       complete: (results) => {
-        processData(results);
+        processData(results, 'URL Data');
         setLoading(false);
       },
       error: (err) => {
@@ -137,7 +140,7 @@ export function DataSourceScreen() {
     });
   }, [url, processData]);
 
-  const handleSampleLoad = useCallback((sampleUrl: string) => {
+  const handleSampleLoad = useCallback((sampleUrl: string, name: string) => {
     setUrl(sampleUrl);
     setLoading(true);
     setError(null);
@@ -148,7 +151,7 @@ export function DataSourceScreen() {
       dynamicTyping: true,
       skipEmptyLines: true,
       complete: (results) => {
-        processData(results);
+        processData(results, name);
         setLoading(false);
       },
       error: (err) => {
@@ -158,19 +161,94 @@ export function DataSourceScreen() {
     });
   }, [processData]);
 
+  const handleChangeData = () => {
+    setData(null);
+    setOriginalData(null);
+    setColumns([]);
+    setDataHistory([]);
+    setDataName('');
+  };
+
+  // Compact view when data is loaded
+  if (data) {
+    return (
+      <div className="p-8 max-w-6xl mx-auto">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="glass-card rounded-xl p-6 border-success/30 bg-success/5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-4">
+                <CheckCircle className="w-8 h-8 text-success" />
+                <div>
+                  <h3 className="font-semibold text-success">{t('data.loaded', lang)}</h3>
+                  <p className="text-muted-foreground">{dataName}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-6">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-primary">{data.length.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">{t('data.rows', lang)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-primary">{Object.keys(data[0] || {}).length}</p>
+                  <p className="text-xs text-muted-foreground">{t('data.columns', lang)}</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={handleChangeData}>
+                  🔄 {lang === 'he' ? 'החלף נתונים' : 'Change Data'}
+                </Button>
+              </div>
+            </div>
+            
+            {/* Preview Table */}
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    {Object.keys(data[0] || {}).map((col) => (
+                      <th key={col}>{col}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.slice(0, 5).map((row, i) => (
+                    <tr key={i}>
+                      {Object.values(row).map((val, j) => (
+                        <td key={j} className="font-mono text-sm">
+                          {val === null || val === undefined ? <span className="text-muted-foreground">—</span> : String(val).substring(0, 30)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <Button 
+              onClick={() => setCurrentScreen('lab')} 
+              className="mt-6 w-full"
+              size="lg"
+            >
+              {t('general.next', lang)} → {t('nav.lab', lang)}
+            </Button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8 max-w-4xl mx-auto">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-3xl font-bold mb-2">{t('data.title', lang)}</h1>
         <p className="text-muted-foreground mb-8">
           {lang === 'he' ? 'בחר מקור נתונים להתחלת הפרויקט' : 'Choose a data source to start your project'}
         </p>
 
-        <Tabs defaultValue="upload" className="w-full">
+        <Tabs defaultValue="sample" className="w-full">
           <TabsList className="grid w-full grid-cols-3 mb-8">
+            <TabsTrigger value="sample" className="gap-2">
+              <FileSpreadsheet className="w-4 h-4" />
+              {t('data.sample', lang)}
+            </TabsTrigger>
             <TabsTrigger value="upload" className="gap-2">
               <Upload className="w-4 h-4" />
               {t('data.upload', lang)}
@@ -179,11 +257,31 @@ export function DataSourceScreen() {
               <Link className="w-4 h-4" />
               {t('data.url', lang)}
             </TabsTrigger>
-            <TabsTrigger value="sample" className="gap-2">
-              <FileSpreadsheet className="w-4 h-4" />
-              {t('data.sample', lang)}
-            </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="sample">
+            <div className="grid grid-cols-2 gap-4">
+              {sampleDatasets.map((dataset) => (
+                <motion.button
+                  key={dataset.name}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => handleSampleLoad(dataset.url, dataset.name)}
+                  className="glass-card rounded-xl p-6 text-right hover:border-primary/50 transition-all flex items-center gap-4 group"
+                  dir={isRTL ? 'rtl' : 'ltr'}
+                  disabled={loading}
+                >
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center text-3xl">
+                    {dataset.icon}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-lg">{dataset.name}</p>
+                    <p className="text-sm text-muted-foreground truncate">{dataset.url.split('/').pop()}</p>
+                  </div>
+                </motion.button>
+              ))}
+            </div>
+          </TabsContent>
 
           <TabsContent value="upload">
             <label className="glass-card rounded-2xl p-12 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 transition-colors group">
@@ -220,27 +318,6 @@ export function DataSourceScreen() {
               </p>
             </div>
           </TabsContent>
-
-          <TabsContent value="sample">
-            <div className="grid gap-4">
-              {sampleDatasets.map((dataset) => (
-                <button
-                  key={dataset.name}
-                  onClick={() => handleSampleLoad(dataset.url)}
-                  className="glass-card rounded-xl p-6 text-right hover:border-primary/50 transition-all flex items-center justify-between group"
-                  dir={isRTL ? 'rtl' : 'ltr'}
-                >
-                  <div className="flex items-center gap-4">
-                    <FileSpreadsheet className="w-8 h-8 text-primary" />
-                    <span className="font-medium">{dataset.name}</span>
-                  </div>
-                  <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                    {t('data.load', lang)}
-                  </Button>
-                </button>
-              ))}
-            </div>
-          </TabsContent>
         </Tabs>
 
         {/* Loading State */}
@@ -264,59 +341,6 @@ export function DataSourceScreen() {
           >
             <AlertCircle className="w-6 h-6 text-destructive" />
             <span className="text-destructive">{error}</span>
-          </motion.div>
-        )}
-
-        {/* Success State */}
-        {data && !loading && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-8"
-          >
-            <div className="glass-card rounded-xl p-6 border-success/30 bg-success/5">
-              <div className="flex items-center gap-4 mb-4">
-                <CheckCircle className="w-8 h-8 text-success" />
-                <div>
-                  <h3 className="font-semibold text-success">{t('data.loaded', lang)}</h3>
-                  <p className="text-muted-foreground">
-                    {data.length} {t('data.rows', lang)} • {Object.keys(data[0] || {}).length} {t('data.columns', lang)}
-                  </p>
-                </div>
-              </div>
-              
-              {/* Preview Table */}
-              <div className="overflow-x-auto rounded-lg border border-border mt-4">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      {Object.keys(data[0] || {}).map((col) => (
-                        <th key={col}>{col}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.slice(0, 5).map((row, i) => (
-                      <tr key={i}>
-                        {Object.values(row).map((val, j) => (
-                          <td key={j} className="font-mono text-sm">
-                            {val === null || val === undefined ? <span className="text-muted-foreground">—</span> : String(val)}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <Button 
-                onClick={() => setCurrentScreen('lab')} 
-                className="mt-6 w-full"
-                size="lg"
-              >
-                {t('general.next', lang)} → {t('nav.lab', lang)}
-              </Button>
-            </div>
           </motion.div>
         )}
       </motion.div>

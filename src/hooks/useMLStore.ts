@@ -3,7 +3,7 @@ import type { Language } from '@/lib/translations';
 
 export type Screen = 'home' | 'data' | 'lab' | 'model' | 'evaluation';
 export type TaskType = 'classification' | 'regression';
-export type ModelType = 'rf' | 'xgb' | 'linear' | 'tree' | 'knn' | 'svm';
+export type ModelType = 'rf' | 'xgb' | 'linear' | 'tree' | 'knn' | 'svm' | 'gb' | 'ridge' | 'lasso';
 
 export interface ColumnInfo {
   name: string;
@@ -27,7 +27,20 @@ export interface ModelResult {
   f1?: number;
   rmse?: number;
   r2?: number;
+  mae?: number;
+  trainScore?: number;
+  cvMean?: number;
+  cvStd?: number;
   featureImportance?: { name: string; importance: number }[];
+  confusionMatrix?: number[][];
+  predictions?: { actual: number; predicted: number }[];
+  rocData?: { fpr: number; tpr: number }[];
+  auc?: number;
+}
+
+interface HistoryState {
+  data: Record<string, any>[];
+  columns: ColumnInfo[];
 }
 
 interface MLState {
@@ -40,10 +53,14 @@ interface MLState {
   // Data State
   data: Record<string, any>[] | null;
   setData: (data: Record<string, any>[] | null) => void;
+  originalData: Record<string, any>[] | null;
+  setOriginalData: (data: Record<string, any>[] | null) => void;
   columns: ColumnInfo[];
   setColumns: (columns: ColumnInfo[]) => void;
   selectedColumn: string | null;
   setSelectedColumn: (column: string | null) => void;
+  dataHistory: HistoryState[];
+  setDataHistory: (history: HistoryState[]) => void;
 
   // Model State
   targetColumn: string | null;
@@ -56,6 +73,16 @@ interface MLState {
   setDroppedFeatures: (features: string[]) => void;
   modelParams: Record<string, any>;
   setModelParams: (params: Record<string, any>) => void;
+  trainSize: number;
+  setTrainSize: (size: number) => void;
+  randomState: number;
+  setRandomState: (state: number) => void;
+  useCV: boolean;
+  setUseCV: (use: boolean) => void;
+  autoScale: boolean;
+  setAutoScale: (scale: boolean) => void;
+  autoEncode: boolean;
+  setAutoEncode: (encode: boolean) => void;
 
   // Results State
   isTraining: boolean;
@@ -73,13 +100,20 @@ const initialState = {
   lang: 'he' as Language,
   currentScreen: 'home' as Screen,
   data: null,
+  originalData: null,
   columns: [],
   selectedColumn: null,
+  dataHistory: [],
   targetColumn: null,
   taskType: 'classification' as TaskType,
   selectedModel: null,
   droppedFeatures: [],
   modelParams: {},
+  trainSize: 0.8,
+  randomState: 42,
+  useCV: false,
+  autoScale: true,
+  autoEncode: true,
   isTraining: false,
   results: null,
   threshold: 0.5,
@@ -91,13 +125,20 @@ export const useMLStore = create<MLState>((set) => ({
   setLang: (lang) => set({ lang }),
   setCurrentScreen: (currentScreen) => set({ currentScreen }),
   setData: (data) => set({ data }),
+  setOriginalData: (originalData) => set({ originalData }),
   setColumns: (columns) => set({ columns }),
   setSelectedColumn: (selectedColumn) => set({ selectedColumn }),
+  setDataHistory: (dataHistory) => set({ dataHistory }),
   setTargetColumn: (targetColumn) => set({ targetColumn }),
   setTaskType: (taskType) => set({ taskType }),
   setSelectedModel: (selectedModel) => set({ selectedModel }),
   setDroppedFeatures: (droppedFeatures) => set({ droppedFeatures }),
   setModelParams: (modelParams) => set({ modelParams }),
+  setTrainSize: (trainSize) => set({ trainSize }),
+  setRandomState: (randomState) => set({ randomState }),
+  setUseCV: (useCV) => set({ useCV }),
+  setAutoScale: (autoScale) => set({ autoScale }),
+  setAutoEncode: (autoEncode) => set({ autoEncode }),
   setIsTraining: (isTraining) => set({ isTraining }),
   setResults: (results) => set({ results }),
   setThreshold: (threshold) => set({ threshold }),
