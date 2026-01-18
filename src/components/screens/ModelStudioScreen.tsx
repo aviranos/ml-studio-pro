@@ -1,17 +1,19 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Trees, Zap, TrendingUp, GitBranch, Users, Target, Play, Loader2, Settings2, Info, Gauge } from 'lucide-react';
+import { Trees, Zap, TrendingUp, GitBranch, Users, Target, Play, Loader2, Settings2, Info, Gauge, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useMLStore, ModelType } from '@/hooks/useMLStore';
 import { t } from '@/lib/translations';
 import { cn } from '@/lib/utils';
+import { trainModel, TrainRequest } from '@/lib/api';
+import { toast } from '@/hooks/use-toast';
 
 const classificationModels: { id: ModelType; icon: typeof Trees; name: string; desc: string; color: string }[] = [
   { id: 'rf', icon: Trees, name: 'Random Forest', desc: 'Ensemble of decision trees', color: 'from-green-500 to-emerald-600' },
@@ -92,6 +94,7 @@ export function ModelStudioScreen() {
     setResults, setCurrentScreen
   } = useMLStore();
   
+  const [trainingLog, setTrainingLog] = useState<string[]>([]);
   const isRTL = lang === 'he';
   const models = taskType === 'classification' ? classificationModels : regressionModels;
 
@@ -121,54 +124,93 @@ export function ModelStudioScreen() {
   };
 
   const handleTrain = async () => {
+    if (!targetColumn || !selectedModel) {
+      toast({
+        title: lang === 'he' ? 'שגיאה' : 'Error',
+        description: lang === 'he' ? 'בחר משתנה יעד ומודל' : 'Select a target variable and model',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsTraining(true);
-    
-    // Simulate training
-    await new Promise(resolve => setTimeout(resolve, 2500));
-    
-    // Generate mock results based on model and params
-    const baseScore = 0.7 + Math.random() * 0.2;
-    const trainScore = baseScore + 0.05 + Math.random() * 0.1;
-    
-    const mockResults = taskType === 'classification' 
-      ? {
-          accuracy: baseScore + Math.random() * 0.05,
-          precision: baseScore - 0.02 + Math.random() * 0.1,
-          recall: baseScore - 0.05 + Math.random() * 0.15,
-          f1: baseScore + Math.random() * 0.05,
-          trainScore,
-          auc: baseScore + 0.05 + Math.random() * 0.1,
-          cvMean: useCV ? baseScore - 0.02 : undefined,
-          cvStd: useCV ? 0.02 + Math.random() * 0.03 : undefined,
-          confusionMatrix: [
-            [Math.floor(80 + Math.random() * 20), Math.floor(10 + Math.random() * 10)],
-            [Math.floor(8 + Math.random() * 10), Math.floor(85 + Math.random() * 15)]
-          ],
-          featureImportance: columns
-            .filter(c => c.name !== targetColumn && !droppedFeatures.includes(c.name))
-            .map(c => ({ name: c.name, importance: Math.random() }))
-            .sort((a, b) => b.importance - a.importance)
-        }
-      : {
-          r2: baseScore,
-          mae: 0.1 + Math.random() * 0.3,
-          rmse: 0.15 + Math.random() * 0.25,
-          trainScore,
-          cvMean: useCV ? baseScore - 0.03 : undefined,
-          cvStd: useCV ? 0.03 + Math.random() * 0.02 : undefined,
-          predictions: Array.from({ length: 20 }, () => {
-            const actual = Math.random() * 100;
-            return { actual, predicted: actual + (Math.random() - 0.5) * 20 };
-          }),
-          featureImportance: columns
-            .filter(c => c.name !== targetColumn && !droppedFeatures.includes(c.name))
-            .map(c => ({ name: c.name, importance: Math.random() }))
-            .sort((a, b) => b.importance - a.importance)
-        };
-    
-    setResults(mockResults);
-    setIsTraining(false);
-    setCurrentScreen('evaluation');
+    setTrainingLog([]);
+
+    const features = columns
+      .map(c => c.name)
+      .filter(c => c !== targetColumn && !droppedFeatures.includes(c));
+
+    if (features.length === 0) {
+      toast({
+        title: lang === 'he' ? 'שגיאה' : 'Error',
+        description: lang === 'he' ? 'בחר לפחות פיצ\'ר אחד' : 'Select at least one feature',
+        variant: 'destructive',
+      });
+      setIsTraining(false);
+      return;
+    }
+
+    const request: TrainRequest = {
+      target: targetColumn,
+      features,
+      model_type: selectedModel,
+      task_type: taskType,
+      params: modelParams,
+      train_size: trainSize,
+      random_state: randomState,
+      use_cv: useCV,
+      auto_scale: autoScale,
+      auto_encode: autoEncode,
+    };
+
+    // Add training logs
+    setTrainingLog(prev => [...prev, lang === 'he' ? '📦 שולח נתונים לשרת...' : '📦 Sending data to backend...']);
+
+    try {
+      setTrainingLog(prev => [...prev, lang === 'he' ? '⚙️ מעבד נתונים...' : '⚙️ Preprocessing data...']);
+      
+      const response = await trainModel(request);
+      
+      setTrainingLog(prev => [...prev, lang === 'he' ? '🧠 מאמן מודל...' : '🧠 Training model...']);
+
+      if (response.success) {
+        setTrainingLog(prev => [...prev, lang === 'he' ? '✅ האימון הושלם!' : '✅ Training complete!']);
+        
+        // Map API response to store format
+        setResults({
+          accuracy: response.metrics.accuracy,
+          precision: response.metrics.precision,
+          recall: response.metrics.recall,
+          f1: response.metrics.f1,
+          r2: response.metrics.r2,
+          mae: response.metrics.mae,
+          rmse: response.metrics.rmse,
+          trainScore: response.metrics.train_score,
+          cvMean: response.metrics.cv_mean,
+          cvStd: response.metrics.cv_std,
+          auc: response.metrics.auc,
+          confusionMatrix: response.confusion_matrix,
+          featureImportance: response.feature_importance,
+          predictions: response.predictions,
+          rocData: response.roc_data,
+        });
+
+        setTimeout(() => {
+          setCurrentScreen('evaluation');
+        }, 500);
+      } else {
+        throw new Error(response.message);
+      }
+    } catch (err) {
+      setTrainingLog(prev => [...prev, `❌ ${err instanceof Error ? err.message : 'Training failed'}`]);
+      toast({
+        title: lang === 'he' ? 'שגיאת אימון' : 'Training Error',
+        description: err instanceof Error ? err.message : 'An error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsTraining(false);
+    }
   };
 
   const canTrain = targetColumn && selectedModel;
@@ -377,7 +419,7 @@ export function ModelStudioScreen() {
                     <Slider 
                       value={[modelParams.n_neighbors]} 
                       onValueChange={([v]) => handleParamChange('n_neighbors', v)}
-                      min={1} max={30} step={2}
+                      min={1} max={20} step={2}
                     />
                   </div>
                 )}
@@ -386,7 +428,7 @@ export function ModelStudioScreen() {
                   <>
                     <div>
                       <div className="flex items-center gap-2 mb-2">
-                        <Label className="text-sm">C: {modelParams.C}</Label>
+                        <Label className="text-sm">C: {modelParams.C?.toFixed(2)}</Label>
                         <ParamTooltip paramKey="C" lang={lang} />
                       </div>
                       <Slider 
@@ -396,12 +438,12 @@ export function ModelStudioScreen() {
                       />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Label className="text-sm">kernel</Label>
-                        <ParamTooltip paramKey="kernel" lang={lang} />
-                      </div>
-                      <Select value={modelParams.kernel} onValueChange={(v) => handleParamChange('kernel', v)}>
-                        <SelectTrigger>
+                      <Label className="text-sm">kernel</Label>
+                      <Select 
+                        value={modelParams.kernel} 
+                        onValueChange={(v) => handleParamChange('kernel', v)}
+                      >
+                        <SelectTrigger className="mt-2">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -417,7 +459,7 @@ export function ModelStudioScreen() {
                 {(selectedModel === 'ridge' || selectedModel === 'lasso') && (
                   <div>
                     <div className="flex items-center gap-2 mb-2">
-                      <Label className="text-sm">alpha: {modelParams.alpha}</Label>
+                      <Label className="text-sm">alpha: {modelParams.alpha?.toFixed(2)}</Label>
                       <ParamTooltip paramKey="alpha" lang={lang} />
                     </div>
                     <Slider 
@@ -431,7 +473,7 @@ export function ModelStudioScreen() {
                 {selectedModel === 'linear' && taskType === 'classification' && (
                   <div>
                     <div className="flex items-center gap-2 mb-2">
-                      <Label className="text-sm">C: {modelParams.C}</Label>
+                      <Label className="text-sm">C: {modelParams.C?.toFixed(2)}</Label>
                       <ParamTooltip paramKey="C" lang={lang} />
                     </div>
                     <Slider 
@@ -441,66 +483,76 @@ export function ModelStudioScreen() {
                     />
                   </div>
                 )}
-
-                <div className="pt-4 border-t border-border">
-                  <Label className="text-sm">{lang === 'he' ? 'זרע אקראי' : 'Random State'}</Label>
-                  <Input 
-                    type="number" 
-                    value={randomState} 
-                    onChange={(e) => setRandomState(Number(e.target.value))}
-                    className="mt-2"
-                    min={0}
-                    max={9999}
-                  />
-                </div>
               </div>
             ) : (
-              <div className="text-center text-muted-foreground py-8">
-                <Settings2 className="w-12 h-12 mx-auto mb-2 opacity-20" />
-                <p>{lang === 'he' ? 'בחר מודל כדי לראות פרמטרים' : 'Select a model to see parameters'}</p>
+              <div className="flex items-center justify-center h-40 text-muted-foreground">
+                <p>{lang === 'he' ? 'בחר מודל להגדרת פרמטרים' : 'Select a model to configure parameters'}</p>
               </div>
             )}
           </div>
 
-          {/* Drop Features */}
+          {/* Feature Selection */}
           <div className="glass-card rounded-xl p-6">
-            <h3 className="font-semibold mb-2">{t('model.dropFeatures', lang)}</h3>
+            <h3 className="font-semibold mb-4 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-warning" />
+              {lang === 'he' ? 'הסר פיצ\'רים (מנע Leakage)' : 'Drop Features (Prevent Leakage)'}
+            </h3>
             <p className="text-sm text-muted-foreground mb-4">
               {lang === 'he' 
-                ? 'בחר עמודות להסרה מהאימון (כמו ID או עמודות שמגלות את התשובה)' 
-                : 'Select columns to exclude from training (like ID or leaky columns)'}
+                ? 'בחר עמודות שלא ישמשו לאימון (כמו ID או עמודות שחושפות את היעד)'
+                : 'Select columns to exclude from training (like ID or columns that reveal the target)'}
             </p>
-            <div className="space-y-2 max-h-80 overflow-y-auto">
-              {columns.filter(c => c.name !== targetColumn).map(col => (
-                <div 
-                  key={col.name} 
-                  className={cn(
-                    "flex items-center gap-3 p-2 rounded-lg transition-colors",
-                    droppedFeatures.includes(col.name) ? "bg-destructive/10" : "hover:bg-secondary"
-                  )}
-                >
-                  <Checkbox 
-                    id={col.name}
-                    checked={droppedFeatures.includes(col.name)}
-                    onCheckedChange={(checked) => handleFeatureToggle(col.name, checked as boolean)}
-                  />
-                  <Label htmlFor={col.name} className="flex-1 cursor-pointer">
-                    <span className="font-medium">{col.name}</span>
-                    <span className="text-xs text-muted-foreground mr-2">({col.type})</span>
-                  </Label>
-                </div>
-              ))}
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              {columns
+                .filter(c => c.name !== targetColumn)
+                .map(col => (
+                  <label 
+                    key={col.name} 
+                    className="flex items-center gap-2 p-2 rounded hover:bg-secondary cursor-pointer"
+                  >
+                    <Checkbox
+                      checked={droppedFeatures.includes(col.name)}
+                      onCheckedChange={(checked) => handleFeatureToggle(col.name, checked as boolean)}
+                    />
+                    <span className="text-sm">{col.name}</span>
+                    <span className="text-xs text-muted-foreground">({col.type})</span>
+                  </label>
+                ))}
             </div>
           </div>
         </div>
 
+        {/* Training Log */}
+        {trainingLog.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-6 glass-card rounded-xl p-4"
+          >
+            <h4 className="font-medium mb-2 text-sm">{lang === 'he' ? '📋 יומן אימון' : '📋 Training Log'}</h4>
+            <div className="font-mono text-sm text-muted-foreground space-y-1">
+              {trainingLog.map((log, i) => (
+                <p key={i}>{log}</p>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
         {/* Train Button */}
-        <div className="flex justify-center mt-12">
-          <Button 
-            size="lg" 
-            onClick={handleTrain}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="flex justify-center mt-12"
+        >
+          <Button
+            size="lg"
             disabled={!canTrain || isTraining}
-            className="text-lg px-12 py-6 bg-gradient-to-r from-primary to-accent hover:opacity-90 shadow-lg shadow-primary/30 glow-primary"
+            onClick={handleTrain}
+            className={cn(
+              "text-lg px-12 py-6 font-semibold",
+              canTrain && "glow-primary"
+            )}
           >
             {isTraining ? (
               <>
@@ -514,7 +566,7 @@ export function ModelStudioScreen() {
               </>
             )}
           </Button>
-        </div>
+        </motion.div>
       </motion.div>
     </div>
   );
