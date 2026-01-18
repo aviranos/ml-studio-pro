@@ -1,33 +1,20 @@
-import { Home, Database, FlaskConical, Brain, BarChart3, Globe, Zap, Server } from 'lucide-react';
+import { Home, Database, Brain, BarChart3, Globe, Zap, Trophy, FlaskConical } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useMLStore, Screen } from '@/hooks/useMLStore';
 import { t, Language } from '@/lib/translations';
-import { useEffect, useState } from 'react';
-import { healthCheck } from '@/lib/api';
 
-const navItems: { id: Screen; icon: typeof Home; labelKey: 'nav.home' | 'nav.data' | 'nav.lab' | 'nav.model' | 'nav.evaluation' }[] = [
+const navItems: { id: Screen; icon: typeof Home; labelKey: 'nav.home' | 'nav.dataHub' | 'nav.model' | 'nav.evaluation' | 'nav.leaderboard' }[] = [
   { id: 'home', icon: Home, labelKey: 'nav.home' },
-  { id: 'data', icon: Database, labelKey: 'nav.data' },
-  { id: 'lab', icon: FlaskConical, labelKey: 'nav.lab' },
+  { id: 'dataHub', icon: Database, labelKey: 'nav.dataHub' },
   { id: 'model', icon: Brain, labelKey: 'nav.model' },
   { id: 'evaluation', icon: BarChart3, labelKey: 'nav.evaluation' },
+  { id: 'leaderboard', icon: Trophy, labelKey: 'nav.leaderboard' },
 ];
 
 export function Sidebar() {
-  const { lang, setLang, currentScreen, setCurrentScreen, data } = useMLStore();
-  const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const { lang, setLang, currentScreen, setCurrentScreen, data, leaderboard } = useMLStore();
   const isRTL = lang === 'he';
-
-  useEffect(() => {
-    async function checkBackend() {
-      const health = await healthCheck();
-      setBackendStatus(health.status === 'offline' ? 'offline' : 'online');
-    }
-    checkBackend();
-    const interval = setInterval(checkBackend, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   return (
     <motion.aside 
@@ -61,7 +48,8 @@ export function Sidebar() {
       <nav className="flex-1 p-4 space-y-1.5">
         {navItems.map((item, index) => {
           const isActive = currentScreen === item.id;
-          const isDisabled = (item.id === 'lab' || item.id === 'model' || item.id === 'evaluation') && !data;
+          const isDisabled = (item.id === 'model' || item.id === 'evaluation') && !data;
+          const showBadge = item.id === 'leaderboard' && leaderboard.length > 0;
           
           return (
             <motion.button
@@ -72,9 +60,9 @@ export function Sidebar() {
               onClick={() => !isDisabled && setCurrentScreen(item.id)}
               disabled={isDisabled}
               className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
+                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative",
                 isActive 
-                  ? "bg-gradient-to-r from-primary/20 to-primary/5 text-primary border border-primary/30 shadow-sm" 
+                  ? "bg-gradient-to-r from-primary/20 to-primary/5 text-primary border border-primary/30 shadow-sm glow-primary" 
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary/50",
                 isDisabled && "opacity-40 cursor-not-allowed"
               )}
@@ -88,10 +76,19 @@ export function Sidebar() {
                 <item.icon className={cn("w-4 h-4", isActive && "text-primary")} />
               </div>
               <span className="font-medium text-sm">{t(item.labelKey, lang)}</span>
-              {item.id === 'data' && data && (
+              
+              {/* Data loaded indicator */}
+              {item.id === 'dataHub' && data && (
                 <div className="ml-auto flex items-center gap-1 text-xs text-success bg-success/10 px-2 py-0.5 rounded-full">
                   <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
                   {lang === 'he' ? 'נטען' : 'Loaded'}
+                </div>
+              )}
+              
+              {/* Leaderboard count badge */}
+              {showBadge && (
+                <div className="ml-auto flex items-center justify-center min-w-[20px] h-5 text-xs font-bold text-primary-foreground bg-primary px-1.5 rounded-full">
+                  {leaderboard.length}
                 </div>
               )}
             </motion.button>
@@ -101,27 +98,11 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="p-4 border-t border-sidebar-border/50 space-y-3">
-        {/* Backend Status */}
-        <div className={cn(
-          "flex items-center gap-2 px-3 py-2 rounded-lg text-xs",
-          backendStatus === 'online' 
-            ? "bg-success/10 text-success" 
-            : backendStatus === 'offline'
-            ? "bg-destructive/10 text-destructive"
-            : "bg-muted text-muted-foreground"
-        )}>
-          <Server className="w-3.5 h-3.5" />
-          <span className="font-medium">
-            {backendStatus === 'checking' 
-              ? (lang === 'he' ? 'בודק...' : 'Checking...') 
-              : backendStatus === 'online' 
-              ? (lang === 'he' ? 'השרת מחובר' : 'Backend Online')
-              : (lang === 'he' ? 'השרת לא זמין' : 'Backend Offline')}
-          </span>
-          <span className={cn(
-            "w-2 h-2 rounded-full ml-auto",
-            backendStatus === 'online' ? "bg-success animate-pulse" : "bg-destructive"
-          )} />
+        {/* Mock Mode Indicator */}
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs bg-accent/10 text-accent">
+          <Zap className="w-3.5 h-3.5" />
+          <span className="font-medium">{t('general.mockMode', lang)}</span>
+          <span className="w-2 h-2 rounded-full ml-auto bg-accent animate-pulse" />
         </div>
 
         {/* Language Toggle */}

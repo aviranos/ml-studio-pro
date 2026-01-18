@@ -66,6 +66,8 @@ export interface TrainResponse {
   feature_importance?: { name: string; importance: number }[];
   predictions?: { actual: number; predicted: number }[];
   roc_data?: { fpr: number; tpr: number }[];
+  pr_data?: { precision: number; recall: number }[];
+  tree_rules?: string;
 }
 
 export interface CleanRequest {
@@ -93,14 +95,18 @@ const MOCK_COLUMNS: ColumnInfoAPI[] = [
   { name: 'signup_date', dtype: 'datetime64', missing: 3, unique: 312, stats: {} },
   { name: 'region', dtype: 'object', missing: 2, unique: 8, stats: { mode: 'North' } },
   { name: 'transactions', dtype: 'int64', missing: 0, unique: 156, stats: { mean: 23.4, median: 18, std: 15.8, min: 1, max: 120 } },
+  { name: 'target', dtype: 'int64', missing: 0, unique: 2, stats: { mode: 1 } },
 ];
 
 const MOCK_DATA_PREVIEW = [
-  { age: 32, income: 55000, category: 'Premium', score: 78.5, is_active: true, signup_date: '2023-01-15', region: 'North', transactions: 25 },
-  { age: 45, income: 72000, category: 'Gold', score: 82.3, is_active: true, signup_date: '2022-08-22', region: 'South', transactions: 45 },
-  { age: 28, income: 38000, category: 'Standard', score: 65.1, is_active: false, signup_date: '2023-06-10', region: 'East', transactions: 12 },
-  { age: null, income: 61000, category: 'Premium', score: null, is_active: true, signup_date: '2022-11-30', region: 'West', transactions: 33 },
-  { age: 52, income: 95000, category: 'Platinum', score: 91.2, is_active: true, signup_date: '2021-03-18', region: 'North', transactions: 78 },
+  { age: 32, income: 55000, category: 'Premium', score: 78.5, is_active: true, signup_date: '2023-01-15', region: 'North', transactions: 25, target: 1 },
+  { age: 45, income: 72000, category: 'Gold', score: 82.3, is_active: true, signup_date: '2022-08-22', region: 'South', transactions: 45, target: 1 },
+  { age: 28, income: 38000, category: 'Standard', score: 65.1, is_active: false, signup_date: '2023-06-10', region: 'East', transactions: 12, target: 0 },
+  { age: null, income: 61000, category: 'Premium', score: null, is_active: true, signup_date: '2022-11-30', region: 'West', transactions: 33, target: 1 },
+  { age: 52, income: 95000, category: 'Platinum', score: 91.2, is_active: true, signup_date: '2021-03-18', region: 'North', transactions: 78, target: 1 },
+  { age: 35, income: 48000, category: 'Gold', score: 70.8, is_active: false, signup_date: '2023-02-28', region: 'South', transactions: 19, target: 0 },
+  { age: 41, income: 67000, category: 'Premium', score: 85.4, is_active: true, signup_date: '2022-05-14', region: 'East', transactions: 52, target: 1 },
+  { age: 29, income: 42000, category: 'Standard', score: 62.9, is_active: true, signup_date: '2023-08-05', region: 'West', transactions: 8, target: 0 },
 ];
 
 let mockColumns = [...MOCK_COLUMNS];
@@ -113,13 +119,9 @@ const randomBetween = (min: number, max: number) => Math.random() * (max - min) 
 
 // ============ MOCK API FUNCTIONS ============
 
-/**
- * Upload a CSV file (MOCK)
- */
 export async function uploadFile(file: File): Promise<UploadResponse> {
   await delay(800);
   
-  // Reset mock data on new upload
   mockColumns = [...MOCK_COLUMNS];
   mockDataPreview = [...MOCK_DATA_PREVIEW];
   mockTotalRows = Math.floor(randomBetween(500, 2000));
@@ -133,9 +135,6 @@ export async function uploadFile(file: File): Promise<UploadResponse> {
   };
 }
 
-/**
- * Upload CSV from URL (MOCK)
- */
 export async function uploadFromURL(url: string): Promise<UploadResponse> {
   await delay(1200);
   
@@ -154,9 +153,6 @@ export async function uploadFromURL(url: string): Promise<UploadResponse> {
   };
 }
 
-/**
- * Get column information and data preview (MOCK)
- */
 export async function getColumns(): Promise<ColumnsResponse> {
   await delay(300);
   
@@ -167,9 +163,6 @@ export async function getColumns(): Promise<ColumnsResponse> {
   };
 }
 
-/**
- * Get full data for the Lab screen (MOCK)
- */
 export async function getData(): Promise<{
   data: Record<string, any>[];
   columns: ColumnInfoAPI[];
@@ -184,9 +177,6 @@ export async function getData(): Promise<{
   };
 }
 
-/**
- * Perform data cleaning operation (MOCK)
- */
 export async function cleanData(request: CleanRequest): Promise<CleanResponse> {
   await delay(600);
 
@@ -232,9 +222,6 @@ export async function cleanData(request: CleanRequest): Promise<CleanResponse> {
   };
 }
 
-/**
- * Reset data to original state (MOCK)
- */
 export async function resetData(): Promise<CleanResponse> {
   await delay(400);
   
@@ -251,9 +238,6 @@ export async function resetData(): Promise<CleanResponse> {
   };
 }
 
-/**
- * Undo last data operation (MOCK)
- */
 export async function undoData(): Promise<CleanResponse> {
   await delay(300);
 
@@ -266,9 +250,6 @@ export async function undoData(): Promise<CleanResponse> {
   };
 }
 
-/**
- * Create a new feature column (MOCK)
- */
 export async function createFeature(name: string, formula: string): Promise<CleanResponse> {
   await delay(500);
 
@@ -322,8 +303,19 @@ export async function trainModel(
   const isClassification = request.task_type === 'classification';
   
   // Generate realistic metrics based on model type
-  const baseAccuracy = request.model_type === 'XGBoost' ? 0.88 : 
-                       request.model_type === 'RandomForest' ? 0.85 : 0.82;
+  const modelBonus = {
+    xgb: 0.05,
+    rf: 0.03,
+    gb: 0.04,
+    tree: -0.02,
+    linear: 0,
+    svm: 0.02,
+    knn: -0.01,
+    ridge: 0,
+    lasso: -0.01,
+  }[request.model_type] || 0;
+
+  const baseAccuracy = 0.82 + modelBonus;
   
   const metrics = isClassification ? {
     accuracy: baseAccuracy + randomBetween(-0.05, 0.05),
@@ -335,7 +327,7 @@ export async function trainModel(
     cv_mean: request.use_cv ? baseAccuracy + randomBetween(-0.03, 0.03) : undefined,
     cv_std: request.use_cv ? randomBetween(0.02, 0.05) : undefined,
   } : {
-    r2: 0.75 + randomBetween(-0.1, 0.1),
+    r2: 0.75 + modelBonus + randomBetween(-0.1, 0.1),
     mae: randomBetween(2, 8),
     rmse: randomBetween(3, 12),
     train_score: 0.8 + randomBetween(-0.05, 0.1),
@@ -361,11 +353,38 @@ export async function trainModel(
     tpr: Math.min(1, (i / 19) ** 0.5 + randomBetween(-0.05, 0.05)),
   })) : undefined;
 
+  // Generate PR curve data for classification
+  const prData = isClassification ? Array.from({ length: 20 }, (_, i) => ({
+    recall: i / 19,
+    precision: Math.max(0.3, 1 - (i / 19) * 0.5 + randomBetween(-0.1, 0.1)),
+  })) : undefined;
+
   // Generate predictions sample
-  const predictions = Array.from({ length: 50 }, () => ({
-    actual: Math.round(randomBetween(0, isClassification ? 1 : 100)),
-    predicted: Math.round(randomBetween(0, isClassification ? 1 : 100)),
-  }));
+  const predictions = Array.from({ length: 50 }, () => {
+    const actual = isClassification ? Math.round(Math.random()) : randomBetween(10, 100);
+    const predicted = isClassification 
+      ? (Math.random() > 0.15 ? actual : 1 - actual)
+      : actual + randomBetween(-15, 15);
+    return { actual, predicted };
+  });
+
+  // Generate tree rules for decision tree
+  const treeRules = request.model_type === 'tree' ? `
+Decision Tree Rules:
+├── If age <= 35.5
+│   ├── If income <= 45000
+│   │   └── Class: 0 (samples: 45)
+│   └── If income > 45000
+│       ├── If transactions <= 20
+│       │   └── Class: 0 (samples: 23)
+│       └── If transactions > 20
+│           └── Class: 1 (samples: 67)
+└── If age > 35.5
+    ├── If score <= 70.0
+    │   └── Class: 0 (samples: 31)
+    └── If score > 70.0
+        └── Class: 1 (samples: 89)
+  `.trim() : undefined;
 
   return {
     success: true,
@@ -375,12 +394,11 @@ export async function trainModel(
     feature_importance: featureImportance,
     predictions,
     roc_data: rocData,
+    pr_data: prData,
+    tree_rules: treeRules,
   };
 }
 
-/**
- * Auto-tune model hyperparameters (MOCK)
- */
 export async function autoTune(request: Omit<TrainRequest, 'params'>): Promise<{
   best_params: Record<string, any>;
   best_score: number;
@@ -388,10 +406,11 @@ export async function autoTune(request: Omit<TrainRequest, 'params'>): Promise<{
   await delay(3000);
 
   const paramsByModel: Record<string, Record<string, any>> = {
-    RandomForest: { n_estimators: 150, max_depth: 12, min_samples_split: 5 },
-    XGBoost: { n_estimators: 200, learning_rate: 0.05, max_depth: 8 },
-    SVM: { C: 1.5, kernel: 'rbf', gamma: 'auto' },
-    LogisticRegression: { C: 0.8, penalty: 'l2', max_iter: 200 },
+    rf: { n_estimators: 150, max_depth: 12, min_samples_split: 5 },
+    xgb: { n_estimators: 200, learning_rate: 0.05, max_depth: 8 },
+    svm: { C: 1.5, kernel: 'rbf', gamma: 'auto' },
+    linear: { C: 0.8, max_iter: 200 },
+    gb: { n_estimators: 180, learning_rate: 0.08, max_depth: 6 },
   };
 
   return {
@@ -400,9 +419,6 @@ export async function autoTune(request: Omit<TrainRequest, 'params'>): Promise<{
   };
 }
 
-/**
- * Check if backend is available (MOCK - always returns online)
- */
 export async function healthCheck(): Promise<{ status: string; message: string }> {
   await delay(100);
   return { status: 'mock', message: 'Running in Mock Mode (no backend required)' };

@@ -3,10 +3,10 @@ export type Language = 'he' | 'en';
 export const translations = {
   // Navigation
   'nav.home': { he: 'בית', en: 'Home' },
-  'nav.data': { he: 'מקור נתונים', en: 'Data Source' },
-  'nav.lab': { he: 'המעבדה', en: 'The Lab' },
+  'nav.dataHub': { he: 'מרכז הנתונים', en: 'Data Hub' },
   'nav.model': { he: 'סטודיו מודלים', en: 'Model Studio' },
   'nav.evaluation': { he: 'הערכה', en: 'Evaluation' },
+  'nav.leaderboard': { he: 'לוח תוצאות', en: 'Leaderboard' },
 
   // Welcome Screen
   'welcome.title': { he: 'ML Studio Pro', en: 'ML Studio Pro' },
@@ -25,18 +25,23 @@ export const translations = {
   'welcome.features.model': { he: 'אימון מודלים', en: 'Model Training' },
   'welcome.features.modelDesc': { he: 'RF, XGBoost, Linear ועוד', en: 'RF, XGBoost, Linear & more' },
 
-  // Data Source
-  'data.title': { he: 'טעינת נתונים', en: 'Load Data' },
-  'data.upload': { he: 'העלאת קובץ', en: 'Upload File' },
-  'data.url': { he: 'מ-URL', en: 'From URL' },
-  'data.sample': { he: 'דאטה לדוגמה', en: 'Sample Data' },
-  'data.dropzone': { he: 'גרור קובץ לכאן או לחץ לבחירה', en: 'Drop file here or click to select' },
-  'data.formats': { he: 'תומך ב-CSV, Excel', en: 'Supports CSV, Excel' },
-  'data.urlPlaceholder': { he: 'הדבק לינק ישיר לקובץ CSV', en: 'Paste direct link to CSV file' },
-  'data.load': { he: 'טען', en: 'Load' },
-  'data.loaded': { he: 'נתונים נטענו בהצלחה!', en: 'Data loaded successfully!' },
-  'data.rows': { he: 'שורות', en: 'Rows' },
-  'data.columns': { he: 'עמודות', en: 'Columns' },
+  // Data Hub
+  'dataHub.title': { he: 'מרכז הנתונים', en: 'Data Hub' },
+  'dataHub.upload': { he: 'העלאת קובץ', en: 'Upload File' },
+  'dataHub.url': { he: 'טען מ-URL', en: 'Load from URL' },
+  'dataHub.sample': { he: 'דאטה לדוגמה', en: 'Sample Data' },
+  'dataHub.dropzone': { he: 'גרור קובץ לכאן או לחץ לבחירה', en: 'Drop file here or click to select' },
+  'dataHub.formats': { he: 'תומך ב-CSV, Excel', en: 'Supports CSV, Excel' },
+  'dataHub.urlPlaceholder': { he: 'הדבק לינק ישיר לקובץ CSV', en: 'Paste direct link to CSV file' },
+  'dataHub.load': { he: 'טען נתונים', en: 'Load Data' },
+  'dataHub.loaded': { he: 'נתונים נטענו בהצלחה!', en: 'Data loaded successfully!' },
+  'dataHub.rows': { he: 'שורות', en: 'Rows' },
+  'dataHub.columns': { he: 'עמודות', en: 'Columns' },
+  'dataHub.missingPercent': { he: '% חסרים', en: '% Missing' },
+  'dataHub.duplicates': { he: 'כפילויות', en: 'Duplicates' },
+  'dataHub.overview': { he: 'סקירה כללית', en: 'Overview' },
+  'dataHub.lab': { he: 'חדר ניתוח', en: 'The Lab' },
+  'dataHub.quality': { he: 'איכות נתונים', en: 'Data Quality' },
 
   // Lab
   'lab.title': { he: 'מעבדת הנתונים', en: 'Data Laboratory' },
@@ -75,6 +80,7 @@ export const translations = {
   'model.parameters': { he: 'פרמטרים', en: 'Parameters' },
   'model.train': { he: 'אמן מודל', en: 'Train Model' },
   'model.training': { he: 'מאמן...', en: 'Training...' },
+  'model.addToLeaderboard': { he: 'הוסף ללוח תוצאות', en: 'Add to Leaderboard' },
 
   // Models
   'model.rf': { he: 'Random Forest', en: 'Random Forest' },
@@ -104,6 +110,16 @@ export const translations = {
   'eval.importance': { he: 'חשיבות פיצ\'רים', en: 'Feature Importance' },
   'eval.optimize': { he: 'מצא מודל אופטימלי', en: 'Find Optimal Model' },
   'eval.noResults': { he: 'אמן מודל כדי לראות תוצאות', en: 'Train a model to see results' },
+  'eval.rocCurve': { he: 'עקומת ROC', en: 'ROC Curve' },
+  'eval.prCurve': { he: 'עקומת Precision-Recall', en: 'Precision-Recall Curve' },
+  'eval.treeRules': { he: 'חוקי העץ', en: 'Tree Rules' },
+  'eval.actualVsPredicted': { he: 'בפועל מול חזוי', en: 'Actual vs Predicted' },
+
+  // Leaderboard
+  'leaderboard.title': { he: 'לוח תוצאות', en: 'Leaderboard' },
+  'leaderboard.empty': { he: 'עדיין אין מודלים. אמן מודל והוסף אותו!', en: 'No models yet. Train a model and add it!' },
+  'leaderboard.clear': { he: 'נקה הכל', en: 'Clear All' },
+  'leaderboard.compare': { he: 'השווה מודלים', en: 'Compare Models' },
 
   // General
   'general.next': { he: 'הבא', en: 'Next' },
@@ -114,6 +130,7 @@ export const translations = {
   'general.error': { he: 'שגיאה', en: 'Error' },
   'general.success': { he: 'הצלחה', en: 'Success' },
   'general.noData': { he: 'אנא טען נתונים תחילה', en: 'Please load data first' },
+  'general.mockMode': { he: 'מצב הדגמה', en: 'Mock Mode' },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

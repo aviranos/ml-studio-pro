@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import type { Language } from '@/lib/translations';
 
-export type Screen = 'home' | 'data' | 'lab' | 'model' | 'evaluation';
+export type Screen = 'home' | 'dataHub' | 'model' | 'evaluation' | 'leaderboard';
 export type TaskType = 'classification' | 'regression';
 export type ModelType = 'rf' | 'xgb' | 'linear' | 'tree' | 'knn' | 'svm' | 'gb' | 'ridge' | 'lasso';
+export type DataHubTab = 'overview' | 'lab' | 'quality';
 
 export interface ColumnInfo {
   name: string;
@@ -35,7 +36,24 @@ export interface ModelResult {
   confusionMatrix?: number[][];
   predictions?: { actual: number; predicted: number }[];
   rocData?: { fpr: number; tpr: number }[];
+  prData?: { precision: number; recall: number }[];
   auc?: number;
+  treeRules?: string;
+}
+
+export interface LeaderboardEntry {
+  id: string;
+  modelType: ModelType;
+  modelName: string;
+  taskType: TaskType;
+  timestamp: Date;
+  params: Record<string, any>;
+  metrics: {
+    accuracy?: number;
+    f1?: number;
+    r2?: number;
+    rmse?: number;
+  };
 }
 
 interface HistoryState {
@@ -49,6 +67,8 @@ interface MLState {
   setLang: (lang: Language) => void;
   currentScreen: Screen;
   setCurrentScreen: (screen: Screen) => void;
+  dataHubTab: DataHubTab;
+  setDataHubTab: (tab: DataHubTab) => void;
 
   // Data State
   data: Record<string, any>[] | null;
@@ -61,6 +81,8 @@ interface MLState {
   setSelectedColumn: (column: string | null) => void;
   dataHistory: HistoryState[];
   setDataHistory: (history: HistoryState[]) => void;
+  dataName: string;
+  setDataName: (name: string) => void;
 
   // Model State
   targetColumn: string | null;
@@ -92,6 +114,11 @@ interface MLState {
   threshold: number;
   setThreshold: (threshold: number) => void;
 
+  // Leaderboard
+  leaderboard: LeaderboardEntry[];
+  addToLeaderboard: (entry: Omit<LeaderboardEntry, 'id' | 'timestamp'>) => void;
+  clearLeaderboard: () => void;
+
   // Actions
   reset: () => void;
 }
@@ -99,11 +126,13 @@ interface MLState {
 const initialState = {
   lang: 'he' as Language,
   currentScreen: 'home' as Screen,
+  dataHubTab: 'overview' as DataHubTab,
   data: null,
   originalData: null,
   columns: [],
   selectedColumn: null,
   dataHistory: [],
+  dataName: '',
   targetColumn: null,
   taskType: 'classification' as TaskType,
   selectedModel: null,
@@ -117,6 +146,7 @@ const initialState = {
   isTraining: false,
   results: null,
   threshold: 0.5,
+  leaderboard: [],
 };
 
 export const useMLStore = create<MLState>((set) => ({
@@ -124,11 +154,13 @@ export const useMLStore = create<MLState>((set) => ({
 
   setLang: (lang) => set({ lang }),
   setCurrentScreen: (currentScreen) => set({ currentScreen }),
+  setDataHubTab: (dataHubTab) => set({ dataHubTab }),
   setData: (data) => set({ data }),
   setOriginalData: (originalData) => set({ originalData }),
   setColumns: (columns) => set({ columns }),
   setSelectedColumn: (selectedColumn) => set({ selectedColumn }),
   setDataHistory: (dataHistory) => set({ dataHistory }),
+  setDataName: (dataName) => set({ dataName }),
   setTargetColumn: (targetColumn) => set({ targetColumn }),
   setTaskType: (taskType) => set({ taskType }),
   setSelectedModel: (selectedModel) => set({ selectedModel }),
@@ -142,6 +174,14 @@ export const useMLStore = create<MLState>((set) => ({
   setIsTraining: (isTraining) => set({ isTraining }),
   setResults: (results) => set({ results }),
   setThreshold: (threshold) => set({ threshold }),
+  
+  addToLeaderboard: (entry) => set((state) => ({
+    leaderboard: [
+      ...state.leaderboard,
+      { ...entry, id: Date.now().toString(), timestamp: new Date() }
+    ]
+  })),
+  clearLeaderboard: () => set({ leaderboard: [] }),
 
   reset: () => set(initialState),
 }));
