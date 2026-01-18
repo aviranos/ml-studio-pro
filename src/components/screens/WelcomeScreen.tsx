@@ -59,7 +59,7 @@ export function WelcomeScreen() {
         >
           <Button
             size="lg"
-            onClick={() => setCurrentScreen('data')}
+            onClick={() => setCurrentScreen('dataHub')}
             className="text-lg px-8 py-6 bg-gradient-to-r from-primary to-accent hover:opacity-90 transition-all shadow-lg shadow-primary/30 glow-primary"
           >
             {t('welcome.start', lang)}

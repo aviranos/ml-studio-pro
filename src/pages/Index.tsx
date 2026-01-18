@@ -1,19 +1,19 @@
 import { Sidebar } from '@/components/Sidebar';
 import { WelcomeScreen } from '@/components/screens/WelcomeScreen';
-import { DataSourceScreen } from '@/components/screens/DataSourceScreen';
-import { LabScreen } from '@/components/screens/LabScreen';
+import { DataHubScreen } from '@/components/screens/DataHubScreen';
 import { ModelStudioScreen } from '@/components/screens/ModelStudioScreen';
 import { EvaluationScreen } from '@/components/screens/EvaluationScreen';
+import { LeaderboardScreen } from '@/components/screens/LeaderboardScreen';
 import { useMLStore } from '@/hooks/useMLStore';
 import { cn } from '@/lib/utils';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 const screens = {
   home: WelcomeScreen,
-  data: DataSourceScreen,
-  lab: LabScreen,
+  dataHub: DataHubScreen,
   model: ModelStudioScreen,
   evaluation: EvaluationScreen,
+  leaderboard: LeaderboardScreen,
 };
 
 const Index = () => {
