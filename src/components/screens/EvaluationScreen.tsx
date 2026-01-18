@@ -81,33 +81,46 @@ export function EvaluationScreen() {
   // Confusion matrix visualization data
   const confusionData = results.confusionMatrix || [[85, 15], [12, 88]];
 
-  // Metric card helper
-  const MetricCard = ({ label, value, color, icon: Icon, subtext }: { 
+  // Metric card helper - Premium Version
+  const MetricCard = ({ label, value, color, icon: Icon, subtext, trend }: { 
     label: string; 
     value: number | string; 
     color: string; 
     icon: typeof Target;
     subtext?: string;
+    trend?: 'up' | 'down' | 'neutral';
   }) => {
     const numValue = typeof value === 'number' ? value : parseFloat(value);
-    const bgClass = numValue >= 0.8 ? 'border-success/30 bg-success/5' : 
-                    numValue >= 0.6 ? 'border-warning/30 bg-warning/5' : 
-                    'border-destructive/30 bg-destructive/5';
+    const bgClass = numValue >= 0.8 ? 'border-success/40' : 
+                    numValue >= 0.6 ? 'border-warning/40' : 
+                    'border-destructive/40';
+    const glowClass = numValue >= 0.8 ? 'glow-success' : '';
     
     return (
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className={cn("metric-card", bgClass)}
+        initial={{ opacity: 0, y: 20, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        whileHover={{ scale: 1.02 }}
+        className={cn("metric-card", bgClass, glowClass)}
       >
-        <div className="flex items-center gap-2 mb-2">
-          <Icon className={cn("w-5 h-5", color)} />
-          <span className="text-muted-foreground text-sm">{label}</span>
+        <div className="flex items-center justify-between mb-3">
+          <div className={cn(
+            "w-10 h-10 rounded-xl flex items-center justify-center",
+            numValue >= 0.8 ? "bg-success/15" : numValue >= 0.6 ? "bg-warning/15" : "bg-destructive/15"
+          )}>
+            <Icon className={cn("w-5 h-5", color)} />
+          </div>
+          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</span>
         </div>
-        <p className={cn("text-4xl font-bold", color)}>
-          {typeof value === 'number' ? (value * 100).toFixed(1) + '%' : value}
+        <p className={cn("text-4xl font-bold tracking-tight", color)}>
+          {typeof value === 'number' ? (value * 100).toFixed(1) : value}
+          <span className="text-lg font-normal text-muted-foreground">%</span>
         </p>
-        {subtext && <p className="text-xs text-muted-foreground mt-1">{subtext}</p>}
+        {subtext && (
+          <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+            {subtext}
+          </p>
+        )}
       </motion.div>
     );
   };

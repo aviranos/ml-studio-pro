@@ -255,26 +255,42 @@ export function LabScreen() {
           {lang === 'he' ? 'נתח, נקה ושפר את הנתונים שלך' : 'Analyze, clean and improve your data'}
         </p>
 
-        {/* Metrics Row */}
+        {/* Metrics Row - Premium Cards */}
         <div className="grid grid-cols-4 gap-4 mb-8">
           {[
-            { label: t('data.rows', lang), value: data.length, color: 'text-primary', icon: '📊' },
-            { label: t('data.columns', lang), value: columns.length, color: 'text-primary', icon: '📋' },
-            { label: t('lab.missing', lang), value: totalMissing, color: totalMissing > 0 ? 'text-warning' : 'text-success', icon: totalMissing > 0 ? '⚠️' : '✅' },
-            { label: t('lab.duplicates', lang), value: duplicates, color: duplicates > 0 ? 'text-warning' : 'text-success', icon: duplicates > 0 ? '⚠️' : '✅' },
+            { label: t('data.rows', lang), value: data.length, icon: '📊', status: 'info' as const },
+            { label: t('data.columns', lang), value: columns.length, icon: '📋', status: 'info' as const },
+            { label: t('lab.missing', lang), value: totalMissing, icon: totalMissing > 0 ? '⚠️' : '✅', status: totalMissing > 0 ? 'warning' as const : 'success' as const },
+            { label: t('lab.duplicates', lang), value: duplicates, icon: duplicates > 0 ? '⚠️' : '✅', status: duplicates > 0 ? 'warning' as const : 'success' as const },
           ].map((metric, i) => (
             <motion.div
               key={metric.label}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ delay: i * 0.1 }}
-              className="metric-card"
+              whileHover={{ scale: 1.02 }}
+              className={cn(
+                "metric-card",
+                metric.status === 'success' && "border-success/40",
+                metric.status === 'warning' && "border-warning/40",
+                metric.status === 'info' && "border-primary/40"
+              )}
             >
-              <div className="flex items-center justify-between">
-                <p className="text-muted-foreground text-sm">{metric.label}</p>
-                <span className="text-lg">{metric.icon}</span>
+              <div className="flex items-center justify-between mb-2">
+                <span className={cn(
+                  "text-xs font-medium uppercase tracking-wide",
+                  metric.status === 'success' && "text-success",
+                  metric.status === 'warning' && "text-warning",
+                  metric.status === 'info' && "text-muted-foreground"
+                )}>{metric.label}</span>
+                <span className="text-xl">{metric.icon}</span>
               </div>
-              <p className={cn("text-3xl font-bold", metric.color)}>{metric.value.toLocaleString()}</p>
+              <p className={cn(
+                "text-4xl font-bold tracking-tight",
+                metric.status === 'success' && "text-success",
+                metric.status === 'warning' && "text-warning",
+                metric.status === 'info' && "text-primary"
+              )}>{metric.value.toLocaleString()}</p>
             </motion.div>
           ))}
         </div>
