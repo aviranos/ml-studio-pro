@@ -99,6 +99,7 @@ export const translations = {
   'eval.f1': { he: 'F1 Score', en: 'F1 Score' },
   'eval.rmse': { he: 'RMSE', en: 'RMSE' },
   'eval.r2': { he: 'R² Score', en: 'R² Score' },
+  'eval.mae': { he: 'MAE', en: 'MAE' },
   'eval.threshold': { he: 'סף החלטה', en: 'Decision Threshold' },
   'eval.importance': { he: 'חשיבות פיצ\'רים', en: 'Feature Importance' },
   'eval.optimize': { he: 'מצא מודל אופטימלי', en: 'Find Optimal Model' },
