@@ -78,6 +78,13 @@ export default {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        xl: "calc(var(--radius) + 4px)",
+        "2xl": "calc(var(--radius) + 8px)",
+      },
+      boxShadow: {
+        'glow-primary': '0 0 20px hsl(199 89% 48% / 0.25), 0 0 40px hsl(199 89% 48% / 0.1)',
+        'glow-success': '0 0 20px hsl(142 76% 36% / 0.25), 0 0 40px hsl(142 76% 36% / 0.1)',
+        'glow-accent': '0 0 20px hsl(262 83% 58% / 0.25), 0 0 40px hsl(262 83% 58% / 0.1)',
       },
       keyframes: {
         "accordion-down": {

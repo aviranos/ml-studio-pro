@@ -1,6 +1,9 @@
 /**
  * ML-Lab API Service
  * Connects to local FastAPI backend at http://localhost:8000
+ * 
+ * IMPORTANT: This requires a running Python backend server.
+ * Start the server with: uvicorn main:app --reload --port 8000
  */
 
 const API_BASE_URL = 'http://localhost:8000';
