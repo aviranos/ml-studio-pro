@@ -11,10 +11,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useMLStore, ColumnInfo, DataHubTab } from '@/hooks/useMLStore';
 import { t } from '@/lib/translations';
 import { cn } from '@/lib/utils';
-import { uploadFile, uploadFromURL, getColumns, cleanData, resetData, undoData, createFeature, ColumnInfoAPI, CleanRequest, isOfflineError } from '@/lib/api';
+import { uploadFile, uploadFromURL, cleanData, resetData, undoData, createFeature, CleanRequest, isOfflineError } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { 
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
 
 const sampleDatasets = [
@@ -38,22 +38,10 @@ const typeColors = {
   boolean: 'from-green-500 to-emerald-500',
 };
 
-function convertColumns(apiColumns: ColumnInfoAPI[]): ColumnInfo[] {
-  return apiColumns.map(col => ({
-    name: col.name,
-    type: col.dtype === 'float64' || col.dtype === 'int64' ? 'numeric' 
-        : col.dtype === 'bool' ? 'boolean'
-        : 'categorical',
-    missing: col.missing,
-    unique: col.unique,
-    stats: col.stats,
-  }));
-}
-
 export function DataHubScreen() {
   const { 
-    lang, data, dataName, dataHubTab, 
-    setData, setOriginalData, setColumns, setCurrentScreen, setDataHistory, setDataName, setDataHubTab,
+    lang, data, dataName, dataHubTab, totalRows,
+    setData, setOriginalData, setColumns, setDataHistory, setDataName, setDataHubTab, setTotalRows,
     columns, selectedColumn, setSelectedColumn
   } = useMLStore();
   
@@ -69,25 +57,49 @@ export function DataHubScreen() {
   const missingPercent = totalCells > 0 ? ((totalMissing / totalCells) * 100).toFixed(1) : '0';
   const duplicates = data ? data.length - new Set(data.map(row => JSON.stringify(row))).size : 0;
 
-  const fetchColumnsAfterUpload = useCallback(async (name: string) => {
-    try {
-      const columnsData = await getColumns();
-      setData(columnsData.data_preview);
-      setOriginalData([...columnsData.data_preview]);
-      setColumns(convertColumns(columnsData.columns));
-      setDataHistory([]);
-      setDataName(name);
-    } catch (err) {
-      const offline = isOfflineError(err);
+  // Process upload response: set data, columns, switch to overview tab
+  const processUploadResponse = useCallback((response: {
+    success: boolean;
+    message: string;
+    filename: string;
+    total_rows: number;
+    data_preview: Record<string, any>[];
+    columns: ColumnInfo[];
+  }) => {
+    if (!response.success) {
       toast({
-        title: offline ? '🔌 Backend Offline' : (lang === 'he' ? 'שגיאה' : 'Error'),
-        description: offline 
-          ? 'Please start the Python backend: python main.py' 
-          : (err instanceof Error ? err.message : 'Failed to fetch columns'),
+        title: lang === 'he' ? 'שגיאה' : 'Error',
+        description: response.message || 'Upload failed',
         variant: 'destructive',
       });
+      return;
     }
-  }, [setData, setOriginalData, setColumns, setDataHistory, setDataName, lang]);
+
+    if (!response.data_preview || response.data_preview.length === 0) {
+      toast({
+        title: lang === 'he' ? 'שגיאה' : 'Error',
+        description: lang === 'he' ? 'הנתונים ריקים' : 'Data is empty',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Set all data from response
+    setData(response.data_preview);
+    setOriginalData([...response.data_preview]);
+    setColumns(response.columns);
+    setDataName(response.filename);
+    setTotalRows(response.total_rows);
+    setDataHistory([]);
+    
+    // CRITICAL: Switch to overview tab immediately
+    setDataHubTab('overview');
+
+    toast({ 
+      title: lang === 'he' ? 'הנתונים נטענו בהצלחה!' : 'Data loaded successfully!',
+      description: `${response.total_rows} rows, ${response.columns.length} columns`
+    });
+  }, [setData, setOriginalData, setColumns, setDataName, setTotalRows, setDataHistory, setDataHubTab, lang]);
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -96,10 +108,7 @@ export function DataHubScreen() {
     setLoading(true);
     try {
       const response = await uploadFile(file);
-      if (response.success) {
-        await fetchColumnsAfterUpload(file.name);
-        toast({ title: t('dataHub.loaded', lang) });
-      }
+      processUploadResponse(response);
     } catch (err) {
       const offline = isOfflineError(err);
       toast({
@@ -112,17 +121,14 @@ export function DataHubScreen() {
     } finally {
       setLoading(false);
     }
-  }, [fetchColumnsAfterUpload, lang]);
+  }, [processUploadResponse, lang]);
 
   const handleUrlLoad = useCallback(async () => {
     if (!url.trim()) return;
     setLoading(true);
     try {
       const response = await uploadFromURL(url);
-      if (response.success) {
-        await fetchColumnsAfterUpload('URL Data');
-        toast({ title: t('dataHub.loaded', lang) });
-      }
+      processUploadResponse(response);
     } catch (err) {
       const offline = isOfflineError(err);
       toast({
@@ -135,17 +141,14 @@ export function DataHubScreen() {
     } finally {
       setLoading(false);
     }
-  }, [url, fetchColumnsAfterUpload, lang]);
+  }, [url, processUploadResponse, lang]);
 
   const handleSampleLoad = useCallback(async (sampleUrl: string, name: string) => {
     setUrl(sampleUrl);
     setLoading(true);
     try {
       const response = await uploadFromURL(sampleUrl);
-      if (response.success) {
-        await fetchColumnsAfterUpload(name);
-        toast({ title: t('dataHub.loaded', lang) });
-      }
+      processUploadResponse(response);
     } catch (err) {
       const offline = isOfflineError(err);
       toast({
@@ -158,7 +161,7 @@ export function DataHubScreen() {
     } finally {
       setLoading(false);
     }
-  }, [fetchColumnsAfterUpload, lang]);
+  }, [processUploadResponse, lang]);
 
   const handleChangeData = () => {
     setData(null);
@@ -166,6 +169,7 @@ export function DataHubScreen() {
     setColumns([]);
     setDataHistory([]);
     setDataName('');
+    setTotalRows(0);
   };
 
   const executeCleanAction = async (request: CleanRequest) => {
@@ -174,7 +178,7 @@ export function DataHubScreen() {
       const response = await cleanData(request);
       if (response.success) {
         setData(response.data_preview);
-        setColumns(convertColumns(response.columns));
+        setColumns(response.columns);
         toast({ title: response.message });
       }
     } catch (err) {
@@ -197,7 +201,7 @@ export function DataHubScreen() {
       const response = await resetData();
       if (response.success) {
         setData(response.data_preview);
-        setColumns(convertColumns(response.columns));
+        setColumns(response.columns);
         toast({ title: response.message });
       }
     } catch (err) {
@@ -213,7 +217,7 @@ export function DataHubScreen() {
       const response = await undoData();
       if (response.success) {
         setData(response.data_preview);
-        setColumns(convertColumns(response.columns));
+        setColumns(response.columns);
         toast({ title: response.message });
       }
     } catch (err) {
@@ -230,7 +234,7 @@ export function DataHubScreen() {
       const response = await createFeature(newColName, formula);
       if (response.success) {
         setData(response.data_preview);
-        setColumns(convertColumns(response.columns));
+        setColumns(response.columns);
         setNewColName('');
         setFormula('');
         toast({ title: response.message });
@@ -387,7 +391,7 @@ export function DataHubScreen() {
             </div>
             <div>
               <h1 className="text-2xl font-bold">{t('dataHub.title', lang)}</h1>
-              <p className="text-muted-foreground text-sm">{dataName}</p>
+              <p className="text-muted-foreground text-sm">{dataName} • {totalRows} rows</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -406,7 +410,7 @@ export function DataHubScreen() {
         {/* Top Metric Cards */}
         <div className="grid grid-cols-4 gap-4 mb-6">
           {[
-            { label: t('dataHub.rows', lang), value: data.length, icon: '📊', color: 'primary' },
+            { label: t('dataHub.rows', lang), value: totalRows, icon: '📊', color: 'primary' },
             { label: t('dataHub.columns', lang), value: columns.length, icon: '📋', color: 'info' },
             { label: t('dataHub.missingPercent', lang), value: `${missingPercent}%`, icon: totalMissing > 0 ? '⚠️' : '✅', color: totalMissing > 0 ? 'warning' : 'success' },
             { label: t('dataHub.duplicates', lang), value: duplicates, icon: duplicates > 0 ? '⚠️' : '✅', color: duplicates > 0 ? 'warning' : 'success' },
@@ -517,52 +521,50 @@ export function DataHubScreen() {
                         </span>
                       </div>
 
-                      {/* Stats Grid */}
-                      {selectedColInfo.stats && (
-                        <div className="grid grid-cols-4 gap-3 mb-6">
-                          {selectedColInfo.type === 'numeric' ? (
-                            <>
-                              {selectedColInfo.stats.mean !== undefined && (
-                                <div className="bg-secondary/50 rounded-lg p-3 text-center">
-                                  <p className="text-xs text-muted-foreground mb-1">{t('lab.mean', lang)}</p>
-                                  <p className="font-bold text-primary">{selectedColInfo.stats.mean.toFixed(2)}</p>
-                                </div>
-                              )}
-                              {selectedColInfo.stats.median !== undefined && (
-                                <div className="bg-secondary/50 rounded-lg p-3 text-center">
-                                  <p className="text-xs text-muted-foreground mb-1">{t('lab.median', lang)}</p>
-                                  <p className="font-bold text-primary">{selectedColInfo.stats.median.toFixed(2)}</p>
-                                </div>
-                              )}
-                              {selectedColInfo.stats.min !== undefined && (
-                                <div className="bg-secondary/50 rounded-lg p-3 text-center">
-                                  <p className="text-xs text-muted-foreground mb-1">Min</p>
-                                  <p className="font-bold text-primary">{selectedColInfo.stats.min.toFixed(2)}</p>
-                                </div>
-                              )}
-                              {selectedColInfo.stats.max !== undefined && (
-                                <div className="bg-secondary/50 rounded-lg p-3 text-center">
-                                  <p className="text-xs text-muted-foreground mb-1">Max</p>
-                                  <p className="font-bold text-primary">{selectedColInfo.stats.max.toFixed(2)}</p>
-                                </div>
-                              )}
-                            </>
-                          ) : (
-                            <>
+                      {/* Stats Grid - now using flat structure */}
+                      <div className="grid grid-cols-4 gap-3 mb-6">
+                        {selectedColInfo.type === 'numeric' ? (
+                          <>
+                            {selectedColInfo.mean !== undefined && (
                               <div className="bg-secondary/50 rounded-lg p-3 text-center">
-                                <p className="text-xs text-muted-foreground mb-1">{t('lab.unique', lang)}</p>
-                                <p className="font-bold text-primary">{selectedColInfo.unique}</p>
+                                <p className="text-xs text-muted-foreground mb-1">{t('lab.mean', lang)}</p>
+                                <p className="font-bold text-primary">{selectedColInfo.mean.toFixed(2)}</p>
                               </div>
-                              {selectedColInfo.stats.mode !== undefined && (
-                                <div className="bg-secondary/50 rounded-lg p-3 text-center col-span-2">
-                                  <p className="text-xs text-muted-foreground mb-1">{t('lab.mode', lang)}</p>
-                                  <p className="font-bold text-primary truncate">{String(selectedColInfo.stats.mode)}</p>
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      )}
+                            )}
+                            {selectedColInfo.median !== undefined && (
+                              <div className="bg-secondary/50 rounded-lg p-3 text-center">
+                                <p className="text-xs text-muted-foreground mb-1">{t('lab.median', lang)}</p>
+                                <p className="font-bold text-primary">{selectedColInfo.median.toFixed(2)}</p>
+                              </div>
+                            )}
+                            {selectedColInfo.min !== undefined && (
+                              <div className="bg-secondary/50 rounded-lg p-3 text-center">
+                                <p className="text-xs text-muted-foreground mb-1">Min</p>
+                                <p className="font-bold text-primary">{selectedColInfo.min.toFixed(2)}</p>
+                              </div>
+                            )}
+                            {selectedColInfo.max !== undefined && (
+                              <div className="bg-secondary/50 rounded-lg p-3 text-center">
+                                <p className="text-xs text-muted-foreground mb-1">Max</p>
+                                <p className="font-bold text-primary">{selectedColInfo.max.toFixed(2)}</p>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <div className="bg-secondary/50 rounded-lg p-3 text-center">
+                              <p className="text-xs text-muted-foreground mb-1">{t('lab.unique', lang)}</p>
+                              <p className="font-bold text-primary">{selectedColInfo.unique}</p>
+                            </div>
+                            {selectedColInfo.mode !== undefined && (
+                              <div className="bg-secondary/50 rounded-lg p-3 text-center col-span-2">
+                                <p className="text-xs text-muted-foreground mb-1">{t('lab.mode', lang)}</p>
+                                <p className="font-bold text-primary truncate">{String(selectedColInfo.mode)}</p>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
 
                       {/* Distribution Chart */}
                       {distributionData.length > 0 && (
@@ -777,7 +779,7 @@ export function DataHubScreen() {
                     disabled={actionLoading !== null || !newColName.trim() || !formula.trim()}
                   >
                     {actionLoading === 'feature' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
-                    {t('lab.createColumn', lang)}
+                    {t('lab.createFeature', lang)}
                   </Button>
                 </div>
               </div>
@@ -787,47 +789,62 @@ export function DataHubScreen() {
           {/* Quality Tab */}
           <TabsContent value="quality">
             <div className="glass-card rounded-xl p-5">
-              <h3 className="font-semibold mb-4">Data Health Report</h3>
-              <div className="overflow-x-auto">
+              <h3 className="font-semibold mb-6">{t('dataHub.quality', lang)}</h3>
+              <div className="overflow-x-auto rounded-lg border border-border">
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Column</th>
-                      <th>Type</th>
-                      <th>Unique</th>
-                      <th>Missing</th>
+                      <th>{t('lab.column', lang)}</th>
+                      <th>{t('lab.type', lang)}</th>
+                      <th>{t('lab.unique', lang)}</th>
+                      <th>{t('lab.missing', lang)}</th>
                       <th>Missing %</th>
-                      <th>Status</th>
+                      <th>Stats</th>
                     </tr>
                   </thead>
                   <tbody>
                     {columns.map((col) => {
-                      const missingPct = data.length > 0 ? ((col.missing / data.length) * 100).toFixed(1) : '0';
+                      const missingPct = data ? ((col.missing / data.length) * 100).toFixed(1) : '0';
                       return (
-                        <tr key={col.name}>
+                        <tr key={col.name} className="hover:bg-secondary/30">
                           <td className="font-medium">{col.name}</td>
                           <td>
-                            <span className={cn("px-2 py-1 rounded text-xs", typeColors[col.type].replace('from-', 'bg-').split(' ')[0] + '/20')}>
+                            <span className={cn(
+                              "px-2 py-0.5 rounded-full text-xs font-medium",
+                              col.type === 'numeric' && "bg-blue-500/10 text-blue-500",
+                              col.type === 'categorical' && "bg-purple-500/10 text-purple-500",
+                              col.type === 'boolean' && "bg-green-500/10 text-green-500",
+                              col.type === 'datetime' && "bg-orange-500/10 text-orange-500"
+                            )}>
                               {col.type}
                             </span>
                           </td>
                           <td>{col.unique}</td>
-                          <td>{col.missing}</td>
+                          <td>
+                            {col.missing > 0 ? (
+                              <span className="text-warning font-medium">{col.missing}</span>
+                            ) : (
+                              <span className="text-success">0</span>
+                            )}
+                          </td>
                           <td>
                             <div className="flex items-center gap-2">
                               <div className="w-16 h-2 bg-secondary rounded-full overflow-hidden">
                                 <div 
-                                  className={cn("h-full", col.missing > 0 ? "bg-warning" : "bg-success")}
+                                  className={cn("h-full rounded-full", parseFloat(missingPct) > 10 ? "bg-warning" : "bg-success")}
                                   style={{ width: `${Math.min(parseFloat(missingPct), 100)}%` }}
                                 />
                               </div>
-                              <span className="text-sm">{missingPct}%</span>
+                              <span className="text-xs text-muted-foreground">{missingPct}%</span>
                             </div>
                           </td>
-                          <td>
-                            <span className={cn("status-badge", col.missing > 0 ? "warning" : "success")}>
-                              {col.missing > 0 ? 'Needs Attention' : 'Good'}
-                            </span>
+                          <td className="text-xs text-muted-foreground">
+                            {col.type === 'numeric' && col.mean !== undefined && (
+                              <span>μ={col.mean.toFixed(1)}, range=[{col.min?.toFixed(1)}, {col.max?.toFixed(1)}]</span>
+                            )}
+                            {col.type === 'categorical' && col.mode !== undefined && (
+                              <span>mode="{col.mode}"</span>
+                            )}
                           </td>
                         </tr>
                       );
@@ -838,13 +855,6 @@ export function DataHubScreen() {
             </div>
           </TabsContent>
         </Tabs>
-
-        {/* Next Button */}
-        <div className="mt-8 flex justify-end">
-          <Button size="lg" onClick={() => setCurrentScreen('model')} className="glow-primary">
-            {t('general.next', lang)} → {t('nav.model', lang)}
-          </Button>
-        </div>
       </motion.div>
     </div>
   );

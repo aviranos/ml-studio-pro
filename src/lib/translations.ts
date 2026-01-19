@@ -64,6 +64,9 @@ export const translations = {
   'lab.featureEng': { he: 'הנדסת פיצ\'רים', en: 'Feature Engineering' },
   'lab.newColumn': { he: 'שם עמודה חדשה', en: 'New column name' },
   'lab.formula': { he: 'נוסחה', en: 'Formula' },
+  'lab.createFeature': { he: 'צור פיצ\'ר', en: 'Create Feature' },
+  'lab.column': { he: 'עמודה', en: 'Column' },
+  'lab.type': { he: 'סוג', en: 'Type' },
   'lab.createColumn': { he: 'צור עמודה', en: 'Create Column' },
 
   // Model Studio
