@@ -6,19 +6,19 @@ export type TaskType = 'classification' | 'regression';
 export type ModelType = 'rf' | 'xgb' | 'linear' | 'tree' | 'knn' | 'svm' | 'gb' | 'ridge' | 'lasso';
 export type DataHubTab = 'overview' | 'lab' | 'quality';
 
+// ColumnInfo matches the backend response directly (flat structure with optional stats)
 export interface ColumnInfo {
   name: string;
   type: 'numeric' | 'categorical' | 'boolean' | 'datetime';
   missing: number;
   unique: number;
-  stats?: {
-    mean?: number;
-    median?: number;
-    std?: number;
-    min?: number;
-    max?: number;
-    mode?: string | number;
-  };
+  // Stats fields (flat, from backend)
+  min?: number;
+  max?: number;
+  mean?: number;
+  median?: number;
+  std?: number;
+  mode?: string | number;
 }
 
 export interface ModelResult {
@@ -83,6 +83,8 @@ interface MLState {
   setDataHistory: (history: HistoryState[]) => void;
   dataName: string;
   setDataName: (name: string) => void;
+  totalRows: number;
+  setTotalRows: (rows: number) => void;
 
   // Model State
   targetColumn: string | null;
@@ -133,6 +135,7 @@ const initialState = {
   selectedColumn: null,
   dataHistory: [],
   dataName: '',
+  totalRows: 0,
   targetColumn: null,
   taskType: 'classification' as TaskType,
   selectedModel: null,
@@ -161,6 +164,7 @@ export const useMLStore = create<MLState>((set) => ({
   setSelectedColumn: (selectedColumn) => set({ selectedColumn }),
   setDataHistory: (dataHistory) => set({ dataHistory }),
   setDataName: (dataName) => set({ dataName }),
+  setTotalRows: (totalRows) => set({ totalRows }),
   setTargetColumn: (targetColumn) => set({ targetColumn }),
   setTaskType: (taskType) => set({ taskType }),
   setSelectedModel: (selectedModel) => set({ selectedModel }),

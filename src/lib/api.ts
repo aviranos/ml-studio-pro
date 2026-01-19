@@ -5,34 +5,32 @@
 
 const API_BASE_URL = 'http://localhost:8000';
 
-// Type definitions
+// Type definitions matching the real backend contract
+
+export interface ColumnInfo {
+  name: string;
+  type: 'numeric' | 'categorical' | 'boolean' | 'datetime';
+  missing: number;
+  unique: number;
+  min?: number;
+  max?: number;
+  mean?: number;
+  median?: number;
+  std?: number;
+  mode?: string | number;
+}
+
 export interface UploadResponse {
   success: boolean;
   message: string;
   filename: string;
-  rows: number;
-  columns: string[];
-}
-
-export interface ColumnStats {
-  mean?: number;
-  median?: number;
-  std?: number;
-  min?: number;
-  max?: number;
-  mode?: string | number;
-}
-
-export interface ColumnInfoAPI {
-  name: string;
-  dtype: string;
-  missing: number;
-  unique: number;
-  stats?: ColumnStats;
+  total_rows: number;
+  data_preview: Record<string, any>[];
+  columns: ColumnInfo[];
 }
 
 export interface ColumnsResponse {
-  columns: ColumnInfoAPI[];
+  columns: ColumnInfo[];
   data_preview: Record<string, any>[];
   total_rows: number;
 }
@@ -84,7 +82,7 @@ export interface CleanResponse {
   success: boolean;
   message: string;
   rows: number;
-  columns: ColumnInfoAPI[];
+  columns: ColumnInfo[];
   data_preview: Record<string, any>[];
 }
 
