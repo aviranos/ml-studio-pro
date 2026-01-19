@@ -130,7 +130,10 @@ export const translations = {
   'general.error': { he: 'שגיאה', en: 'Error' },
   'general.success': { he: 'הצלחה', en: 'Success' },
   'general.noData': { he: 'אנא טען נתונים תחילה', en: 'Please load data first' },
-  'general.mockMode': { he: 'מצב הדגמה', en: 'Mock Mode' },
+  'general.backendOnline': { he: 'Backend מחובר', en: 'Backend Connected' },
+  'general.backendOffline': { he: 'Backend מנותק', en: 'Backend Offline' },
+  'general.backendChecking': { he: 'בודק חיבור...', en: 'Checking...' },
+  'general.backendOfflineHint': { he: 'הפעל את השרת: python main.py', en: 'Start the server: python main.py' },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

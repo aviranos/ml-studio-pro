@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useMLStore, ColumnInfo, DataHubTab } from '@/hooks/useMLStore';
 import { t } from '@/lib/translations';
 import { cn } from '@/lib/utils';
-import { uploadFile, uploadFromURL, getColumns, cleanData, resetData, undoData, createFeature, ColumnInfoAPI, CleanRequest } from '@/lib/api';
+import { uploadFile, uploadFromURL, getColumns, cleanData, resetData, undoData, createFeature, ColumnInfoAPI, CleanRequest, isOfflineError } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie
@@ -78,9 +78,12 @@ export function DataHubScreen() {
       setDataHistory([]);
       setDataName(name);
     } catch (err) {
+      const offline = isOfflineError(err);
       toast({
-        title: lang === 'he' ? 'שגיאה' : 'Error',
-        description: err instanceof Error ? err.message : 'Failed to fetch columns',
+        title: offline ? '🔌 Backend Offline' : (lang === 'he' ? 'שגיאה' : 'Error'),
+        description: offline 
+          ? 'Please start the Python backend: python main.py' 
+          : (err instanceof Error ? err.message : 'Failed to fetch columns'),
         variant: 'destructive',
       });
     }
@@ -98,9 +101,12 @@ export function DataHubScreen() {
         toast({ title: t('dataHub.loaded', lang) });
       }
     } catch (err) {
+      const offline = isOfflineError(err);
       toast({
-        title: lang === 'he' ? 'שגיאה' : 'Error',
-        description: err instanceof Error ? err.message : 'Upload failed',
+        title: offline ? '🔌 Backend Offline' : (lang === 'he' ? 'שגיאה' : 'Error'),
+        description: offline 
+          ? 'Please start the Python backend: python main.py' 
+          : (err instanceof Error ? err.message : 'Upload failed'),
         variant: 'destructive',
       });
     } finally {
@@ -118,9 +124,12 @@ export function DataHubScreen() {
         toast({ title: t('dataHub.loaded', lang) });
       }
     } catch (err) {
+      const offline = isOfflineError(err);
       toast({
-        title: lang === 'he' ? 'שגיאה' : 'Error',
-        description: err instanceof Error ? err.message : 'Failed to load URL',
+        title: offline ? '🔌 Backend Offline' : (lang === 'he' ? 'שגיאה' : 'Error'),
+        description: offline 
+          ? 'Please start the Python backend: python main.py' 
+          : (err instanceof Error ? err.message : 'Failed to load URL'),
         variant: 'destructive',
       });
     } finally {
@@ -138,9 +147,12 @@ export function DataHubScreen() {
         toast({ title: t('dataHub.loaded', lang) });
       }
     } catch (err) {
+      const offline = isOfflineError(err);
       toast({
-        title: lang === 'he' ? 'שגיאה' : 'Error',
-        description: err instanceof Error ? err.message : 'Failed to load sample',
+        title: offline ? '🔌 Backend Offline' : (lang === 'he' ? 'שגיאה' : 'Error'),
+        description: offline 
+          ? 'Please start the Python backend: python main.py' 
+          : (err instanceof Error ? err.message : 'Failed to load sample'),
         variant: 'destructive',
       });
     } finally {
@@ -166,9 +178,12 @@ export function DataHubScreen() {
         toast({ title: response.message });
       }
     } catch (err) {
+      const offline = isOfflineError(err);
       toast({
-        title: lang === 'he' ? 'שגיאה' : 'Error',
-        description: err instanceof Error ? err.message : 'Operation failed',
+        title: offline ? '🔌 Backend Offline' : (lang === 'he' ? 'שגיאה' : 'Error'),
+        description: offline 
+          ? 'Please start the Python backend: python main.py' 
+          : (err instanceof Error ? err.message : 'Operation failed'),
         variant: 'destructive',
       });
     } finally {

@@ -1,4 +1,5 @@
-import { Home, Database, Brain, BarChart3, Globe, Zap, Trophy, FlaskConical } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Home, Database, Brain, BarChart3, Globe, Zap, Trophy, FlaskConical, WifiOff, Wifi } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useMLStore, Screen } from '@/hooks/useMLStore';
@@ -11,6 +12,58 @@ const navItems: { id: Screen; icon: typeof Home; labelKey: 'nav.home' | 'nav.dat
   { id: 'evaluation', icon: BarChart3, labelKey: 'nav.evaluation' },
   { id: 'leaderboard', icon: Trophy, labelKey: 'nav.leaderboard' },
 ];
+
+function BackendStatusIndicator() {
+  const { lang } = useMLStore();
+  const [status, setStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+
+  useEffect(() => {
+    const checkBackend = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/health');
+        if (response.ok) {
+          setStatus('online');
+        } else {
+          setStatus('offline');
+        }
+      } catch {
+        setStatus('offline');
+      }
+    };
+
+    checkBackend();
+    const interval = setInterval(checkBackend, 10000); // Check every 10 seconds
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className={cn(
+      "flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors",
+      status === 'online' ? "bg-success/10 text-success" : 
+      status === 'offline' ? "bg-destructive/10 text-destructive" :
+      "bg-muted/10 text-muted-foreground"
+    )}>
+      {status === 'online' ? (
+        <Wifi className="w-3.5 h-3.5" />
+      ) : status === 'offline' ? (
+        <WifiOff className="w-3.5 h-3.5" />
+      ) : (
+        <Zap className="w-3.5 h-3.5" />
+      )}
+      <span className="font-medium">
+        {status === 'online' ? t('general.backendOnline', lang) : 
+         status === 'offline' ? t('general.backendOffline', lang) : 
+         t('general.backendChecking', lang)}
+      </span>
+      <span className={cn(
+        "w-2 h-2 rounded-full ml-auto",
+        status === 'online' ? "bg-success" : 
+        status === 'offline' ? "bg-destructive" : 
+        "bg-muted-foreground animate-pulse"
+      )} />
+    </div>
+  );
+}
 
 export function Sidebar() {
   const { lang, setLang, currentScreen, setCurrentScreen, data, leaderboard } = useMLStore();
@@ -98,12 +151,8 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="p-4 border-t border-sidebar-border/50 space-y-3">
-        {/* Mock Mode Indicator */}
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs bg-accent/10 text-accent">
-          <Zap className="w-3.5 h-3.5" />
-          <span className="font-medium">{t('general.mockMode', lang)}</span>
-          <span className="w-2 h-2 rounded-full ml-auto bg-accent animate-pulse" />
-        </div>
+        {/* Backend Status Indicator */}
+        <BackendStatusIndicator />
 
         {/* Language Toggle */}
         <button
