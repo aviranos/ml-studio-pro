@@ -16,13 +16,7 @@ import { toast } from '@/hooks/use-toast';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
-
-const sampleDatasets = [
-  { name: 'Titanic', desc: 'Classification', url: 'https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv', icon: '🚢' },
-  { name: 'Iris', desc: 'Multi-Class', url: 'https://raw.githubusercontent.com/mwaskom/seaborn-data/master/iris.csv', icon: '🌸' },
-  { name: 'Tips', desc: 'Regression', url: 'https://raw.githubusercontent.com/mwaskom/seaborn-data/master/tips.csv', icon: '💵' },
-  { name: 'Penguins', desc: 'Classification', url: 'https://raw.githubusercontent.com/mwaskom/seaborn-data/master/penguins.csv', icon: '🐧' },
-];
+import { MOCK_DATASETS } from '@/lib/mockData';
 
 const typeIcons = {
   numeric: Hash,
@@ -143,25 +137,24 @@ export function DataHubScreen() {
     }
   }, [url, processUploadResponse, lang]);
 
-  const handleSampleLoad = useCallback(async (sampleUrl: string, name: string) => {
-    setUrl(sampleUrl);
-    setLoading(true);
-    try {
-      const response = await uploadFromURL(sampleUrl);
-      processUploadResponse(response);
-    } catch (err) {
-      const offline = isOfflineError(err);
-      toast({
-        title: offline ? '🔌 Backend Offline' : (lang === 'he' ? 'שגיאה' : 'Error'),
-        description: offline 
-          ? 'Please start the Python backend: python main.py' 
-          : (err instanceof Error ? err.message : 'Failed to load sample'),
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [processUploadResponse, lang]);
+  // Load mock data (no backend needed)
+  const handleMockLoad = useCallback((datasetName: string) => {
+    const dataset = MOCK_DATASETS.find(d => d.name === datasetName);
+    if (!dataset) return;
+
+    setData(dataset.data);
+    setOriginalData([...dataset.data]);
+    setColumns(dataset.columns);
+    setDataName(`${dataset.name} (Demo)`);
+    setTotalRows(dataset.data.length);
+    setDataHistory([]);
+    setDataHubTab('overview');
+
+    toast({
+      title: lang === 'he' ? '🎯 נתוני הדגמה נטענו!' : '🎯 Demo data loaded!',
+      description: `${dataset.data.length} rows, ${dataset.columns.length} columns`,
+    });
+  }, [setData, setOriginalData, setColumns, setDataName, setTotalRows, setDataHistory, setDataHubTab, lang]);
 
   const handleChangeData = () => {
     setData(null);
@@ -315,12 +308,12 @@ export function DataHubScreen() {
 
             <TabsContent value="sample">
               <div className="grid grid-cols-2 gap-4">
-                {sampleDatasets.map((dataset) => (
+                {MOCK_DATASETS.map((dataset) => (
                   <motion.button
                     key={dataset.name}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => handleSampleLoad(dataset.url, dataset.name)}
+                    onClick={() => handleMockLoad(dataset.name)}
                     className="glass-card rounded-xl p-6 text-right hover:border-primary/50 transition-all flex items-center gap-4 group"
                     disabled={loading}
                   >
@@ -329,7 +322,7 @@ export function DataHubScreen() {
                     </div>
                     <div className="flex-1">
                       <p className="font-semibold text-lg">{dataset.name}</p>
-                      <p className="text-sm text-muted-foreground">{dataset.desc}</p>
+                      <p className="text-sm text-muted-foreground">{dataset.description}</p>
                     </div>
                   </motion.button>
                 ))}
