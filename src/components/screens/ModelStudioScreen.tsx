@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useMLStore, ModelType } from '@/hooks/useMLStore';
 import { t } from '@/lib/translations';
 import { cn } from '@/lib/utils';
-import { trainModel, TrainRequest } from '@/lib/api';
+import { trainModel, TrainRequest, isOfflineError } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 
 const classificationModels: { id: ModelType; icon: typeof Trees; name: string; desc: string; color: string }[] = [
@@ -202,10 +202,13 @@ export function ModelStudioScreen() {
         throw new Error(response.message);
       }
     } catch (err) {
-      setTrainingLog(prev => [...prev, `❌ ${err instanceof Error ? err.message : 'Training failed'}`]);
+      const offline = isOfflineError(err);
+      setTrainingLog(prev => [...prev, `❌ ${offline ? 'Backend offline' : (err instanceof Error ? err.message : 'Training failed')}`]);
       toast({
-        title: lang === 'he' ? 'שגיאת אימון' : 'Training Error',
-        description: err instanceof Error ? err.message : 'An error occurred',
+        title: offline ? '🔌 Backend Offline' : (lang === 'he' ? 'שגיאת אימון' : 'Training Error'),
+        description: offline 
+          ? 'Please start the Python backend: python main.py' 
+          : (err instanceof Error ? err.message : 'An error occurred'),
         variant: 'destructive',
       });
     } finally {
